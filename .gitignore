@@ -1,0 +1,65 @@
+# ============================================
+# EuropeanEnergyDataAnalytics
+# ============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local data
+data/raw/*
+data/interim/*
+data/curated/*
+
+# Keep directories in Git
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/curated/.gitkeep
+
+# Airflow runtime files
+airflow/logs/*
+!airflow/logs/.gitkeep
+
+# IDE / Editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test / coverage
+.coverage
+htmlcov/
+
+# AWS / Terraform - local state and secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,14 @@
+name: energy
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pandas
+  - requests
+  - python-dotenv
+  - jupyter
+  - ipykernel
+  - matplotlib
+  - pip
