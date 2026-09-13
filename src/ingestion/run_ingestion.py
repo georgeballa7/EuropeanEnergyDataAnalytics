@@ -1,3 +1,17 @@
+"""
+Orchestriere die inkrementelle Aufnahme der Ember-Energiedaten in Bronze.
+
+Für jeden konfigurierten Datensatz prüft die Pipeline zunächst über die
+leichtgewichtige Ember Options API, ob ein neuer Quellmonat verfügbar ist.
+Nur wenn neue Daten existieren, wird der eigentliche Datensatz abgerufen und
+als quellnahe JSON-Antwort in Amazon S3 gespeichert.
+
+Der zuletzt erfolgreich geladene Quellmonat wird separat in S3 verwaltet.
+Dieser Zustand wird erst nach erfolgreichem Upload aktualisiert. Dadurch wird
+vermieden, dass ein fehlgeschlagener Load fälschlicherweise als verarbeitet
+gilt.
+"""
+
 import logging
 from datetime import date, datetime
 
@@ -12,21 +26,17 @@ logger = logging.getLogger(__name__)
 
 def parse_date(value: str) -> date:
     """
-    Convert Ember/state ISO date strings to a Python date.
+    Konvertiere ISO-Datumswerte von Ember bzw. aus dem State in ``date``.
 
-    Examples:
-        2026-08-01
-        2026-08-01T00:00:00
-        2026-08-01T00:00:00Z
+    Unterstützte Beispiele sind ``2026-08-01``,
+    ``2026-08-01T00:00:00`` und ``2026-08-01T00:00:00Z``.
     """
     normalized = value.replace("Z", "+00:00")
     return datetime.fromisoformat(normalized).date()
 
 
 def next_month(value: date) -> date:
-    """
-    Return the first day of the month following value.
-    """
+    """Gib den ersten Tag des auf ``value`` folgenden Monats zurück."""
     if value.month == 12:
         return date(
             year=value.year + 1,
@@ -43,8 +53,9 @@ def next_month(value: date) -> date:
 
 def normalize_project_start_date(value: str) -> date:
     """
-    Convert config values such as '2015-01'
-    to '2015-01-01'.
+    Normalisiere ein konfiguriertes Monatsdatum auf ein vollständiges Datum.
+
+    Beispielsweise wird ``2015-01`` zu ``2015-01-01`` erweitert.
     """
     if len(value) == 7:
         value = f"{value}-01"
@@ -53,6 +64,13 @@ def normalize_project_start_date(value: str) -> date:
 
 
 def run_ingestion() -> None:
+    """
+    Führe die inkrementelle Bronze-Ingestion für alle Datensätze aus.
+
+    Die Pipeline prüft zunächst die Datenverfügbarkeit, vergleicht sie mit dem
+    persistenten Ladezustand, lädt ausschließlich neue Daten und aktualisiert
+    den State erst nach erfolgreicher Speicherung in S3.
+    """
     config = load_config()
 
     countries = config["countries"]
@@ -95,7 +113,7 @@ def run_ingestion() -> None:
         )
 
         # --------------------------------------------------
-        # 1. Lightweight check against Ember Options API
+        # 1. Leichtgewichtige Prüfung über die Ember Options API
         # --------------------------------------------------
 
         latest_available_raw = (
@@ -110,7 +128,7 @@ def run_ingestion() -> None:
         )
 
         # --------------------------------------------------
-        # 2. Read ingestion state from S3
+        # 2. Persistenten Ingestion-State aus S3 lesen
         # --------------------------------------------------
 
         last_loaded_raw = state.get_last_source_date(
@@ -131,7 +149,7 @@ def run_ingestion() -> None:
         )
 
         # --------------------------------------------------
-        # 3. Nothing new -> skip large dataset API request
+        # 3. Keine neuen Daten -> großen API-Aufruf überspringen
         # --------------------------------------------------
 
         if (
@@ -147,7 +165,7 @@ def run_ingestion() -> None:
             continue
 
         # --------------------------------------------------
-        # 4. Determine incremental starting point
+        # 4. Startpunkt für den inkrementellen Load bestimmen
         # --------------------------------------------------
 
         if last_loaded is None:
@@ -172,7 +190,7 @@ def run_ingestion() -> None:
             )
 
         # --------------------------------------------------
-        # 5. Download only new data
+        # 5. Ausschließlich neue Quelldaten herunterladen
         # --------------------------------------------------
 
         response = client.fetch_dataset(
@@ -213,7 +231,7 @@ def run_ingestion() -> None:
         )
 
         # --------------------------------------------------
-        # 6. Store original API response in Bronze
+        # 6. Originale API-Antwort in der Bronze-Schicht speichern
         # --------------------------------------------------
 
         s3_uri = writer.upload_raw_json(
@@ -229,7 +247,7 @@ def run_ingestion() -> None:
         )
 
         # --------------------------------------------------
-        # 7. Update state only after successful S3 upload
+        # 7. State erst nach erfolgreichem S3-Upload aktualisieren
         # --------------------------------------------------
 
         state.update(
@@ -246,7 +264,7 @@ def run_ingestion() -> None:
         updated += 1
 
     # ------------------------------------------------------
-    # Airflow-friendly summary
+    # Zusammenfassung für Airflow und Logs
     # ------------------------------------------------------
 
     logger.info(
