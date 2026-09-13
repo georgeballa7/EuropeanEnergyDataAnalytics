@@ -1,3 +1,11 @@
+"""
+Schreibe rohe Ember-API-Antworten in die Bronze-Schicht von Amazon S3.
+
+Die Bronze-Schicht bewahrt die API-Antwort möglichst quellnah als JSON auf.
+Die Objekte werden nach Datensatz und Ingestion-Datum organisiert und erhalten
+einen UTC-Zeitstempel, sodass einzelne Ladevorgänge nachvollziehbar bleiben.
+"""
+
 import json
 from datetime import datetime, timezone
 
@@ -5,6 +13,8 @@ import boto3
 
 
 class S3Writer:
+    """Kapsle das Schreiben unveränderter Bronze-JSON-Objekte nach S3."""
+
     def __init__(
         self,
         bucket_name: str,
@@ -12,6 +22,7 @@ class S3Writer:
         profile_name: str | None = None,
         bronze_prefix: str = "bronze/ember",
     ):
+        """Initialisiere Bucket, Bronze-Präfix und S3-Client."""
         self.bucket_name = bucket_name
         self.bronze_prefix = bronze_prefix
 
@@ -27,7 +38,19 @@ class S3Writer:
         data: dict,
         dataset: str,
     ) -> str:
+        """
+        Speichere eine vollständige Ember-API-Antwort als Bronze-JSON in S3.
 
+        Der S3-Key folgt dem Muster
+        ``bronze/ember/<dataset>/ingestion_date=YYYY-MM-DD/<dataset>_<timestamp>.json``.
+        Dadurch bleibt sowohl der Datensatz als auch der Zeitpunkt der
+        Ingestion im Speicherpfad nachvollziehbar.
+
+        Rückgabe
+        --------
+        str
+            Vollständige S3-URI des geschriebenen Bronze-Objekts.
+        """
         now = datetime.now(timezone.utc)
 
         ingestion_date = now.strftime("%Y-%m-%d")
