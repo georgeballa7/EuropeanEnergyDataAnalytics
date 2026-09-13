@@ -1,3 +1,12 @@
+"""
+Client für den Zugriff auf die Ember Energy API.
+
+Das Modul kapselt die HTTP-Kommunikation mit Ember und stellt gezielte
+Methoden für verfügbare Quelldaten sowie den eigentlichen Datendownload
+bereit. Der API-Schlüssel wird aus der Umgebungsvariable ``EMBER_API_KEY``
+gelesen und nicht im Quellcode gespeichert.
+"""
+
 import os
 
 import requests
@@ -7,9 +16,12 @@ load_dotenv()
 
 
 class EmberClient:
+    """Kapsle wiederverwendbare Zugriffe auf die Ember Energy API."""
+
     BASE_URL = "https://api.ember-energy.org"
 
     def __init__(self, timeout: int = 30):
+        """Initialisiere den Client mit API-Schlüssel und Request-Timeout."""
         self.api_key = os.getenv("EMBER_API_KEY")
         self.timeout = timeout
 
@@ -24,12 +36,12 @@ class EmberClient:
         temporal_resolution: str = "monthly",
     ) -> dict:
         """
-        Fetch available dates for an Ember dataset.
+        Lade die verfügbaren Datumswerte für einen Ember-Datensatz.
 
-        This is used as a lightweight check before downloading
-        the actual dataset.
+        Diese leichte Options-Abfrage wird verwendet, bevor der eigentliche
+        Datensatz geladen wird. Dadurch kann die Pipeline zunächst prüfen, ob
+        überhaupt neue Quelldaten vorhanden sind.
         """
-
         endpoint = (
             f"/v1/options/"
             f"{dataset}/"
@@ -51,10 +63,7 @@ class EmberClient:
         dataset: str,
         temporal_resolution: str = "monthly",
     ) -> str:
-        """
-        Return the latest date currently available from Ember.
-        """
-
+        """Gib das aktuell neueste bei Ember verfügbare Quelldatum zurück."""
         result = self.get_available_dates(
             dataset=dataset,
             temporal_resolution=temporal_resolution,
@@ -81,12 +90,12 @@ class EmberClient:
         start_date: str | None = None,
     ) -> dict:
         """
-        Fetch an Ember dataset.
+        Lade einen Ember-Datensatz für die angegebenen Länder.
 
-        If start_date is provided, only data beginning from
-        that date is requested.
+        Wird ``start_date`` übergeben, fordert die API nur Daten ab diesem
+        Zeitpunkt an. Dadurch unterstützt die Methode inkrementelle Loads,
+        ohne historische Daten unnötig erneut herunterzuladen.
         """
-
         params = {
             "entity_code": ",".join(countries),
             "api_key": self.api_key,
