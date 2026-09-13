@@ -1,16 +1,17 @@
 """
-Run the Silver-to-Gold transformation pipeline.
+Führe die Transformation von Silver nach Gold aus.
 
 Pipeline
 --------
-1. Load Silver Parquet datasets from Amazon S3.
-2. Build the dimensional Gold model.
-3. Validate dimensional-model integrity.
-4. Stop immediately if Gold DQ fails.
-5. Write validated Gold tables to Amazon S3 as Parquet.
+1. Lade die Silver-Parquet-Datensätze aus Amazon S3.
+2. Erzeuge das dimensionale Gold-Modell.
+3. Validiere die Integrität des dimensionalen Modells.
+4. Brich die Verarbeitung sofort ab, wenn die Gold-DQ fehlschlägt.
+5. Schreibe ausschließlich validierte Gold-Tabellen als Parquet nach S3.
 
-The module is designed to run independently from notebooks and can
-later be called by Apache Airflow.
+Das Modul ist bewusst unabhängig von Notebooks ausführbar und kann dadurch
+später als wiederverwendbarer Pipeline-Schritt von Apache Airflow orchestriert
+werden.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from src.transformation.silver_writer import dataframe_to_parquet_bytes
 
 
 # ---------------------------------------------------------------------
-# Configuration
+# Konfiguration
 # ---------------------------------------------------------------------
 
 BUCKET_NAME = (
@@ -53,19 +54,18 @@ SERIES_CONFIG_PATH = (
 
 
 # ---------------------------------------------------------------------
-# AWS session
+# AWS-Session
 # ---------------------------------------------------------------------
 
 def get_s3_client():
     """
-    Create an S3 client using the local project AWS profile.
+    Erzeuge einen S3-Client mit dem lokalen AWS-Profil des Projekts.
 
-    Notes
-    -----
-    The named profile is appropriate for local development.
-
-    When this code runs inside Airflow in a production AWS environment,
-    IAM roles should be preferred over long-lived credentials.
+    Hinweise
+    --------
+    Das benannte Profil ist für die lokale Entwicklung geeignet. Wenn dieser
+    Code später innerhalb von Airflow in einer produktiven AWS-Umgebung läuft,
+    sollten IAM Roles gegenüber langlebigen Zugangsdaten bevorzugt werden.
     """
     session = boto3.Session(
         profile_name=AWS_PROFILE,
@@ -76,7 +76,7 @@ def get_s3_client():
 
 
 # ---------------------------------------------------------------------
-# Silver loading
+# Silver-Daten laden
 # ---------------------------------------------------------------------
 
 def get_latest_silver_key(
@@ -84,33 +84,33 @@ def get_latest_silver_key(
     dataset_name: str,
 ) -> str:
     """
-    Find the most recently written Silver Parquet object.
+    Ermittle das zuletzt geschriebene Silver-Parquet-Objekt.
 
-    Parameters
-    ----------
+    Parameter
+    ---------
     s3_client:
-        Configured boto3 S3 client.
+        Konfigurierter boto3-S3-Client.
 
     dataset_name:
-        Silver dataset name, for example 'generation'.
+        Name des Silver-Datensatzes, zum Beispiel ``generation``.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     str
-        S3 object key of the newest Parquet file.
+        S3-Objektschlüssel der neuesten Parquet-Datei.
 
     Raises
     ------
     FileNotFoundError
-        If no Silver Parquet object exists for the dataset.
+        Wenn für den Datensatz kein Silver-Parquet-Objekt vorhanden ist.
 
-    Important
-    ---------
-    The current Silver implementation writes a complete dataset snapshot.
-    Therefore the latest object represents the current Silver state.
+    Wichtig
+    -------
+    Die aktuelle Silver-Implementierung schreibt vollständige Snapshots. Daher
+    repräsentiert das neueste Objekt den aktuellen Silver-Zustand.
 
-    If Silver is changed later to append-only incremental files, this
-    loading strategy must also be changed.
+    Falls Silver später auf append-only inkrementelle Dateien umgestellt wird,
+    muss auch diese Ladestrategie entsprechend angepasst werden.
     """
     prefix = (
         f"silver/ember/{dataset_name}/"
@@ -145,9 +145,7 @@ def load_silver_dataset(
     s3_client,
     dataset_name: str,
 ) -> pd.DataFrame:
-    """
-    Load one Silver Parquet dataset from S3 into pandas.
-    """
+    """Lade einen Silver-Parquet-Datensatz aus S3 in einen pandas DataFrame."""
     key = get_latest_silver_key(
         s3_client,
         dataset_name,
@@ -169,9 +167,7 @@ def load_silver_dataset(
 def load_all_silver_datasets(
     s3_client,
 ) -> dict[str, pd.DataFrame]:
-    """
-    Load all datasets required to construct the Gold model.
-    """
+    """Lade alle Silver-Datensätze, die für das Gold-Modell benötigt werden."""
     datasets = {}
 
     for dataset_name in SILVER_DATASETS:
@@ -190,16 +186,16 @@ def load_all_silver_datasets(
 
 
 # ---------------------------------------------------------------------
-# Gold storage
+# Gold-Daten speichern
 # ---------------------------------------------------------------------
 
 def build_gold_s3_key(
     table_name: str,
 ) -> str:
     """
-    Build the S3 key for a Gold table.
+    Erzeuge den S3-Objektschlüssel für eine Gold-Tabelle.
 
-    Gold currently uses one current snapshot per table.
+    Gold verwendet aktuell genau einen gültigen Snapshot pro Tabelle.
     """
     return (
         f"gold/{table_name}/"
@@ -213,11 +209,11 @@ def write_gold_table(
     df: pd.DataFrame,
 ) -> str:
     """
-    Serialize one Gold table as Parquet and write it to S3.
+    Serialisiere eine Gold-Tabelle als Parquet und schreibe sie nach S3.
 
-    Existing objects with the same key are replaced. This gives the Gold
-    layer snapshot semantics: each table represents the latest validated
-    analytical state.
+    Ein vorhandenes Objekt mit demselben Schlüssel wird ersetzt. Dadurch gilt
+    für Gold eine Snapshot-Semantik: Jede Tabelle repräsentiert den neuesten
+    vollständig validierten analytischen Zustand.
     """
     parquet_bytes = dataframe_to_parquet_bytes(
         df
@@ -241,9 +237,7 @@ def write_gold_model(
     s3_client,
     gold_datasets: dict[str, pd.DataFrame],
 ) -> None:
-    """
-    Write every validated Gold dimension and fact table to S3.
-    """
+    """Schreibe alle validierten Gold-Dimensionen und Faktentabellen nach S3."""
     for table_name, df in gold_datasets.items():
 
         uri = write_gold_table(
@@ -263,25 +257,23 @@ def write_gold_model(
 # ---------------------------------------------------------------------
 
 def main() -> None:
-    """
-    Execute the complete Silver-to-Gold pipeline.
-    """
+    """Führe die vollständige Silver-to-Gold-Pipeline aus."""
     print("Starting Gold transformation.")
 
     s3_client = get_s3_client()
 
-    # 1. Read validated Silver data.
+    # 1. Validierte Silver-Daten laden.
     silver_datasets = load_all_silver_datasets(
         s3_client
     )
 
-    # 2. Construct dimensions and facts.
+    # 2. Dimensionen und Faktentabellen erzeugen.
     gold_datasets = build_gold_model(
         silver_datasets=silver_datasets,
         config_path=str(SERIES_CONFIG_PATH),
     )
 
-    # 3. Validate dimensional-model integrity.
+    # 3. Integrität des dimensionalen Modells validieren.
     quality_result = validate_gold_model(
         gold_datasets
     )
@@ -294,7 +286,7 @@ def main() -> None:
 
     print("Gold Data Quality: PASSED")
 
-    # 4. Persist only validated Gold data.
+    # 4. Ausschließlich validierte Gold-Daten persistieren.
     write_gold_model(
         s3_client,
         gold_datasets,
