@@ -1,5 +1,9 @@
 """
-Write Silver-layer DataFrames to Amazon S3 as Parquet files.
+Schreibe DataFrames der Silver-Schicht als Parquet-Dateien nach Amazon S3.
+
+Das Modul trennt die fachliche Transformation bewusst von der Speicherung.
+Es serialisiert bereits bereinigte und validierte Silver-Daten in das
+spaltenorientierte Parquet-Format und legt sie anschließend in S3 ab.
 """
 
 from __future__ import annotations
@@ -15,12 +19,12 @@ def dataframe_to_parquet_bytes(
     df: pd.DataFrame,
 ) -> bytes:
     """
-    Serialize a pandas DataFrame to Parquet in memory.
+    Serialisiere einen pandas DataFrame im Arbeitsspeicher als Parquet.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     bytes
-        Parquet file content.
+        Binärer Inhalt der erzeugten Parquet-Datei.
     """
     buffer = io.BytesIO()
 
@@ -39,7 +43,10 @@ def build_silver_s3_key(
     dataset_name: str,
 ) -> str:
     """
-    Build the S3 object key for a Silver dataset.
+    Erzeuge den S3-Objektschlüssel für einen Silver-Datensatz.
+
+    Der UTC-Zeitstempel macht einzelne Silver-Snapshots unterscheidbar und
+    verhindert, dass ein bestehendes Objekt unbeabsichtigt überschrieben wird.
     """
     timestamp = datetime.now(
         timezone.utc
@@ -59,32 +66,31 @@ def write_silver_to_s3(
     region_name: str = "eu-central-1",
 ) -> str:
     """
-    Serialize a Silver DataFrame as Parquet and upload it to S3.
+    Serialisiere einen Silver-DataFrame als Parquet und lade ihn nach S3.
 
-    Parameters
-    ----------
+    Parameter
+    ---------
     df:
-        Silver-ready DataFrame.
+        Bereinigter und für die Silver-Schicht vorbereiteter DataFrame.
 
     dataset_name:
-        Name of the Ember dataset.
+        Name des Ember-Datensatzes.
 
     bucket_name:
-        Target S3 bucket.
+        Ziel-Bucket in Amazon S3.
 
     aws_profile:
-        Optional local AWS CLI profile.
-        In production, IAM roles should be preferred.
+        Optionales lokales AWS-CLI-Profil. In einer produktiven AWS-Umgebung
+        sollten IAM Roles und temporäre Credentials bevorzugt werden.
 
     region_name:
-        AWS region.
+        AWS-Region des Projekts.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     str
-        Full S3 URI of the uploaded Parquet object.
+        Vollständige S3-URI des hochgeladenen Parquet-Objekts.
     """
-
     parquet_bytes = dataframe_to_parquet_bytes(df)
 
     s3_key = build_silver_s3_key(
