@@ -1,12 +1,12 @@
 """
-Data-quality checks for the Gold dimensional model.
+Datenqualitätsprüfungen für das dimensionale Gold-Modell.
 
-The checks focus on dimensional-model integrity:
+Die Prüfungen konzentrieren sich auf die Integrität des dimensionalen Modells:
 
-1. Dimension keys must be unique.
-2. Fact-table grains must be unique.
-3. Foreign keys must resolve to the corresponding dimensions.
-4. Required measure columns must not contain unexpected null values.
+1. Dimensionsschlüssel müssen eindeutig und vollständig sein.
+2. Die Granularität jeder Faktentabelle muss eindeutig sein.
+3. Fremdschlüssel müssen auf die zugehörigen Dimensionen auflösbar sein.
+4. Erforderliche Messgrößen dürfen keine unerwarteten Nullwerte enthalten.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pandas as pd
 
 
 # ---------------------------------------------------------------------
-# Model metadata
+# Modellmetadaten
 # ---------------------------------------------------------------------
 
 DIMENSION_KEYS = {
@@ -76,16 +76,14 @@ FACT_MEASURES = {
 
 
 # ---------------------------------------------------------------------
-# Generic checks
+# Generische Prüfungen
 # ---------------------------------------------------------------------
 
 def count_duplicate_keys(
     df: pd.DataFrame,
     key_columns: list[str],
 ) -> int:
-    """
-    Count rows that violate the expected table key or grain.
-    """
+    """Zähle Zeilen, die den erwarteten Schlüssel bzw. Grain verletzen."""
     return int(
         df.duplicated(
             subset=key_columns,
@@ -98,9 +96,7 @@ def count_nulls(
     df: pd.DataFrame,
     columns: list[str],
 ) -> dict[str, int]:
-    """
-    Count null values for selected columns.
-    """
+    """Zähle Nullwerte in den ausgewählten Spalten."""
     return {
         column: int(df[column].isna().sum())
         for column in columns
@@ -108,15 +104,13 @@ def count_nulls(
 
 
 # ---------------------------------------------------------------------
-# Dimension validation
+# Validierung der Dimensionen
 # ---------------------------------------------------------------------
 
 def validate_dimensions(
     gold_datasets: dict[str, pd.DataFrame],
 ) -> dict:
-    """
-    Validate uniqueness and completeness of dimension keys.
-    """
+    """Prüfe Eindeutigkeit und Vollständigkeit der Dimensionsschlüssel."""
     results = {}
 
     for table_name, key_columns in DIMENSION_KEYS.items():
@@ -151,15 +145,13 @@ def validate_dimensions(
 
 
 # ---------------------------------------------------------------------
-# Fact validation
+# Validierung der Faktentabellen
 # ---------------------------------------------------------------------
 
 def validate_facts(
     gold_datasets: dict[str, pd.DataFrame],
 ) -> dict:
-    """
-    Validate fact-table grain and required measures.
-    """
+    """Prüfe Grain und erforderliche Messgrößen der Faktentabellen."""
     results = {}
 
     for table_name, grain_columns in FACT_GRAINS.items():
@@ -204,17 +196,19 @@ def validate_facts(
 
 
 # ---------------------------------------------------------------------
-# Referential-integrity checks
+# Prüfungen der referenziellen Integrität
 # ---------------------------------------------------------------------
 
 def validate_foreign_keys(
     gold_datasets: dict[str, pd.DataFrame],
 ) -> dict:
     """
-    Check that fact-table foreign keys resolve to the correct dimensions.
+    Prüfe, ob Fremdschlüssel der Faktentabellen in den Dimensionen existieren.
 
-    Generation and emissions resolve series_key against dim_energy_series.
-    Capacity resolves capacity_series_key against dim_capacity_series.
+    Generation und Emissions lösen ``series_key`` gegen
+    ``dim_energy_series`` auf. Capacity löst ``capacity_series_key`` gegen
+    ``dim_capacity_series`` auf. Alle Faktentabellen referenzieren außerdem
+    gültige Datums- und Länderschlüssel.
     """
     valid_dates = set(
         gold_datasets["dim_date"]["date"]
@@ -287,19 +281,20 @@ def validate_foreign_keys(
 
 
 # ---------------------------------------------------------------------
-# Complete Gold-model validation
+# Vollständige Validierung des Gold-Modells
 # ---------------------------------------------------------------------
 
 def validate_gold_model(
     gold_datasets: dict[str, pd.DataFrame],
 ) -> dict:
     """
-    Run all Gold-layer data-quality checks.
+    Führe sämtliche Datenqualitätsprüfungen der Gold-Schicht aus.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     dict
-        Validation results for dimensions, facts and foreign keys.
+        Strukturierte Prüfergebnisse für Dimensionen, Faktentabellen und
+        Fremdschlüssel einschließlich des Gesamtstatus ``passed``.
     """
 
     dimension_results = validate_dimensions(
