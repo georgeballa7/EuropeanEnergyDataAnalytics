@@ -22,6 +22,7 @@ DIMENSION_KEYS = {
     "dim_date": ["date"],
     "dim_country": ["entity_code"],
     "dim_energy_series": ["series_key"],
+    "dim_capacity_series": ["capacity_series_key"],
 }
 
 
@@ -47,7 +48,7 @@ FACT_GRAINS = {
     "fact_capacity": [
         "date",
         "entity_code",
-        "series_key",
+        "capacity_series_key",
     ],
 }
 
@@ -210,9 +211,11 @@ def validate_foreign_keys(
     gold_datasets: dict[str, pd.DataFrame],
 ) -> dict:
     """
-    Check that fact-table foreign keys resolve to dimensions.
-    """
+    Check that fact-table foreign keys resolve to the correct dimensions.
 
+    Generation and emissions resolve series_key against dim_energy_series.
+    Capacity resolves capacity_series_key against dim_capacity_series.
+    """
     valid_dates = set(
         gold_datasets["dim_date"]["date"]
     )
@@ -225,6 +228,12 @@ def validate_foreign_keys(
         gold_datasets[
             "dim_energy_series"
         ]["series_key"]
+    )
+
+    valid_capacity_series = set(
+        gold_datasets[
+            "dim_capacity_series"
+        ]["capacity_series_key"]
     )
 
     results = {}
@@ -243,16 +252,25 @@ def validate_foreign_keys(
         ).sum()
 
         orphan_series = 0
+        orphan_capacity_series = 0
 
         if "series_key" in df.columns:
             orphan_series = (
                 ~df["series_key"].isin(valid_series)
             ).sum()
 
+        if "capacity_series_key" in df.columns:
+            orphan_capacity_series = (
+                ~df["capacity_series_key"].isin(
+                    valid_capacity_series
+                )
+            ).sum()
+
         passed = (
             orphan_dates == 0
             and orphan_countries == 0
             and orphan_series == 0
+            and orphan_capacity_series == 0
         )
 
         results[table_name] = {
@@ -260,6 +278,9 @@ def validate_foreign_keys(
             "orphan_dates": int(orphan_dates),
             "orphan_countries": int(orphan_countries),
             "orphan_series": int(orphan_series),
+            "orphan_capacity_series": int(
+                orphan_capacity_series
+            ),
         }
 
     return results
