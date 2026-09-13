@@ -1,17 +1,19 @@
 """
-Bronze-to-Silver transformations for Ember energy datasets.
+Bronze-zu-Silver-Transformationen für Ember-Energiedatensätze.
 
-This module standardizes data types and applies the analytical project
-scope while preserving the source semantics identified during EDA.
+Dieses Modul standardisiert Datentypen und wendet den analytischen
+Projektumfang an. Dabei bleiben die während der EDA identifizierten
+fachlichen Eigenschaften der Quelldaten erhalten.
 
-No statistical outliers are removed and no missing values are imputed.
+Statistische Ausreißer werden nicht entfernt und fehlende Werte werden nicht
+künstlich imputiert.
 """
 
 import pandas as pd
 
 
 # ---------------------------------------------------------------------
-# Project configuration
+# Projektkonfiguration
 # ---------------------------------------------------------------------
 
 CORE_DATASETS = {
@@ -27,7 +29,7 @@ PROJECT_START_DATE = pd.Timestamp("2010-01-01")
 
 
 # ---------------------------------------------------------------------
-# Dataset-specific schema definitions
+# Datensatzspezifische Schemadefinitionen
 # ---------------------------------------------------------------------
 
 DATASET_NUMERIC_COLUMNS = {
@@ -69,17 +71,17 @@ BOOLEAN_COLUMNS = {
 
 
 # ---------------------------------------------------------------------
-# Validation
+# Validierung
 # ---------------------------------------------------------------------
 
 def validate_dataset_name(dataset_name: str) -> None:
     """
-    Ensure that the requested dataset is supported.
+    Prüfe, ob der angeforderte Datensatz unterstützt wird.
 
     Raises
     ------
     ValueError
-        If the dataset name is unknown.
+        Wenn der Datensatzname unbekannt ist.
     """
     if dataset_name not in SUPPORTED_DATASETS:
         raise ValueError(
@@ -89,15 +91,13 @@ def validate_dataset_name(dataset_name: str) -> None:
 
 
 # ---------------------------------------------------------------------
-# Common transformations
+# Gemeinsame Transformationen
 # ---------------------------------------------------------------------
 
 def standardize_common_columns(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Standardize columns shared by all Ember datasets.
-    """
+    """Standardisiere die von allen Ember-Datensätzen gemeinsam genutzten Spalten."""
     df = df.copy()
 
     required_columns = {
@@ -114,13 +114,13 @@ def standardize_common_columns(
             f"{sorted(missing_columns)}"
         )
 
-    # Convert source date strings to analytical datetime values.
+    # Quelldatumswerte in analytisch nutzbare datetime-Werte umwandeln.
     df["date"] = pd.to_datetime(
         df["date"],
         errors="raise",
     )
 
-    # Use explicit pandas string types.
+    # Explizite pandas-String-Datentypen verwenden.
     df["entity"] = df["entity"].astype("string")
     df["entity_code"] = df["entity_code"].astype("string")
 
@@ -128,7 +128,7 @@ def standardize_common_columns(
 
 
 # ---------------------------------------------------------------------
-# Dataset-specific type transformations
+# Datensatzspezifische Typtransformationen
 # ---------------------------------------------------------------------
 
 def standardize_dataset_types(
@@ -136,11 +136,11 @@ def standardize_dataset_types(
     dataset_name: str,
 ) -> pd.DataFrame:
     """
-    Standardize numeric, boolean and series columns for a dataset.
+    Standardisiere numerische, boolesche und Reihen-Spalten eines Datensatzes.
 
-    Numeric conversion uses strict error handling so that unexpected
-    source values cause the transformation to fail instead of being
-    silently converted to missing values.
+    Die numerische Konvertierung verwendet eine strikte Fehlerbehandlung.
+    Unerwartete Quellwerte führen dadurch zum Abbruch der Transformation,
+    anstatt stillschweigend in fehlende Werte umgewandelt zu werden.
     """
     df = df.copy()
 
@@ -189,7 +189,7 @@ def standardize_dataset_types(
 
 
 # ---------------------------------------------------------------------
-# Project scope
+# Projektumfang
 # ---------------------------------------------------------------------
 
 def apply_project_scope(
@@ -197,13 +197,13 @@ def apply_project_scope(
     dataset_name: str,
 ) -> pd.DataFrame:
     """
-    Apply the analytical time scope of the project.
+    Wende den analytischen Zeitumfang des Projekts an.
 
-    The four core datasets are restricted to January 2010 onwards.
+    Die vier Core-Datensätze werden auf Januar 2010 und später begrenzt.
 
-    Capacity retains its original source coverage because the available
-    dataset starts later and has more limited country and technology
-    coverage.
+    Capacity behält seine ursprüngliche Quellabdeckung, da dieser Datensatz
+    später beginnt und eine eingeschränktere Länder- und Technologieabdeckung
+    besitzt.
     """
     df = df.copy()
 
@@ -216,15 +216,13 @@ def apply_project_scope(
 
 
 # ---------------------------------------------------------------------
-# Sorting
+# Sortierung
 # ---------------------------------------------------------------------
 
 def sort_silver_data(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Sort Silver data into a deterministic analytical order.
-    """
+    """Sortiere Silver-Daten in eine deterministische analytische Reihenfolge."""
     sort_columns = [
         "entity_code",
         "date",
@@ -241,7 +239,7 @@ def sort_silver_data(
 
 
 # ---------------------------------------------------------------------
-# Main transformation
+# Haupttransformation
 # ---------------------------------------------------------------------
 
 def clean_energy_data(
@@ -249,24 +247,24 @@ def clean_energy_data(
     dataset_name: str,
 ) -> pd.DataFrame:
     """
-    Transform an Ember Bronze DataFrame into a Silver-ready DataFrame.
+    Transformiere einen Ember-Bronze-DataFrame in einen Silver-fähigen DataFrame.
 
-    Transformation steps
-    --------------------
-    1. Validate the dataset name.
-    2. Standardize common columns.
-    3. Standardize dataset-specific data types.
-    4. Apply the analytical project scope.
-    5. Sort the result deterministically.
+    Transformationsschritte
+    -----------------------
+    1. Datensatznamen validieren.
+    2. Gemeinsame Spalten standardisieren.
+    3. Datensatzspezifische Datentypen standardisieren.
+    4. Analytischen Projektumfang anwenden.
+    5. Ergebnis deterministisch sortieren.
 
-    Important EDA-derived rules
-    ---------------------------
-    - Statistical outliers are preserved.
-    - Negative Net Imports are preserved.
-    - Generation shares are not globally restricted to 0-100.
-    - Aggregate-series indicators are preserved.
-    - Missing observations are not artificially imputed.
-    - Capacity retains its original, more limited coverage.
+    Wichtige aus der EDA abgeleitete Regeln
+    ---------------------------------------
+    - Statistische Ausreißer bleiben erhalten.
+    - Negative Net Imports bleiben erhalten.
+    - Generation Shares werden nicht global auf 0–100 begrenzt.
+    - Aggregate-Series-Indikatoren bleiben erhalten.
+    - Fehlende Beobachtungen werden nicht künstlich imputiert.
+    - Capacity behält seine ursprüngliche, eingeschränktere Abdeckung.
     """
     validate_dataset_name(dataset_name)
 
