@@ -1,53 +1,56 @@
 """
-Build the Gold dimensional model from Silver energy datasets.
+Erzeuge das dimensionale Gold-Modell aus validierten Silver-Energiedaten.
 
-Purpose
--------
-This module converts validated Silver-layer Ember datasets into a
-business-ready dimensional model for analytics in Athena and Power BI.
+Zweck
+-----
+Dieses Modul überführt validierte Ember-Datensätze aus der Silver-Schicht in
+ein fachlich aufbereitetes dimensionales Modell für Analysen mit Athena und
+Power BI.
 
-The Gold model follows a fact-constellation design:
+Das Gold-Modell folgt einem Fact-Constellation- bzw. Galaxy-Schema:
 
-Dimensions
-----------
+Dimensionen
+-----------
 - dim_date
 - dim_country
 - dim_energy_series
 - dim_capacity_series
 
-Facts
------
+Faktentabellen
+--------------
 - fact_generation
 - fact_emissions
 - fact_demand
 - fact_carbon_intensity
 - fact_capacity
 
-Key strategy
-------------
+Schlüsselstrategie
+------------------
 - date:
-  Uses the natural business key stored in the source data.
-  No artificial date_id is introduced.
+  Verwendet den natürlichen Business Key aus den Quelldaten.
+  Es wird kein künstlicher date_id eingeführt.
 
 - entity_code:
-  Uses the stable country code as the business key.
+  Verwendet den stabilen Ländercode als Business Key.
 
 - series_key:
-  Uses a deterministic surrogate key for generation/emissions series.
+  Verwendet einen deterministischen Surrogatschlüssel für Reihen aus
+  Generation und Emissions.
 
 - capacity_series_key:
-  Uses a separate deterministic surrogate key for capacity series because
-  capacity series can have different aggregate semantics from generation
-  and emissions even when the business name is identical.
+  Verwendet einen separaten deterministischen Surrogatschlüssel für
+  Capacity-Reihen, da diese trotz identischer fachlicher Bezeichnung andere
+  Aggregationssemantiken als Generation und Emissions besitzen können.
 
-Design principles
------------------
-- Preserve the natural grain of each business process.
-- Keep dimensions reusable where business semantics are truly shared.
-- Keep capacity series separate where source semantics differ.
-- Avoid unnecessary surrogate keys.
-- Keep transformation logic deterministic and reproducible.
-- Separate source data from project-specific business classification.
+Designprinzipien
+----------------
+- Die natürliche Granularität jedes Geschäftsprozesses bleibt erhalten.
+- Dimensionen werden nur dort gemeinsam verwendet, wo die fachliche Semantik
+  tatsächlich übereinstimmt.
+- Capacity-Reihen bleiben getrennt, wenn die Quellsemantik abweicht.
+- Unnötige Surrogatschlüssel werden vermieden.
+- Die Transformation bleibt deterministisch und reproduzierbar.
+- Quelldaten und projektspezifische fachliche Klassifikation bleiben getrennt.
 """
 
 from __future__ import annotations
@@ -59,7 +62,7 @@ import yaml
 
 
 # ---------------------------------------------------------------------
-# Model configuration
+# Modellkonfiguration
 # ---------------------------------------------------------------------
 
 CORE_DATASETS = {
@@ -76,37 +79,39 @@ ENERGY_SERIES_DATASETS = {
 
 
 # ---------------------------------------------------------------------
-# Key generation
+# Schlüsselerzeugung
 # ---------------------------------------------------------------------
 
 def create_series_key(series_name: str) -> int:
     """
-    Create a deterministic surrogate key for an energy series.
+    Erzeuge einen deterministischen Surrogatschlüssel für eine Energiereihe.
 
-    Parameters
-    ----------
+    Parameter
+    ---------
     series_name:
-        Business name of an Ember series, for example "Solar",
-        "Coal" or "Clean".
+        Fachliche Bezeichnung einer Ember-Reihe, zum Beispiel ``Solar``,
+        ``Coal`` oder ``Clean``.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     int
-        Stable integer surrogate key derived from the series name.
+        Stabiler ganzzahliger Surrogatschlüssel, der aus dem Reihennamen
+        abgeleitet wird.
 
-    Why a surrogate key?
-    --------------------
-    Series names are descriptive business attributes. Using them directly
-    as fact-table keys would create wider joins and tighter coupling to
-    source naming conventions.
+    Warum ein Surrogatschlüssel?
+    ----------------------------
+    Reihennamen sind beschreibende fachliche Attribute. Würden sie direkt als
+    Schlüssel in Faktentabellen verwendet, entstünden breitere Joins und eine
+    stärkere Kopplung an die Namenskonventionen der Quelle.
 
-    A deterministic hash is used instead of sequential IDs so that an
-    existing key remains stable even if new series are added later.
+    Statt fortlaufender IDs wird ein deterministischer Hash verwendet. Dadurch
+    bleibt ein bestehender Schlüssel stabil, auch wenn später neue Reihen
+    hinzukommen.
 
-    Notes
-    -----
-    Only the first 15 hexadecimal characters are used so the resulting
-    value remains within a practical integer range.
+    Hinweise
+    --------
+    Es werden nur die ersten 15 hexadezimalen Zeichen verwendet, damit der
+    resultierende Wert in einem praktikablen Integer-Bereich bleibt.
     """
     digest = hashlib.sha256(
         series_name.encode("utf-8")
@@ -116,36 +121,36 @@ def create_series_key(series_name: str) -> int:
 
 
 # ---------------------------------------------------------------------
-# Dimension builders
+# Aufbau der Dimensionen
 # ---------------------------------------------------------------------
 
 def build_dim_date(
     silver_datasets: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
     """
-    Build the monthly date dimension.
+    Erzeuge die monatliche Datumsdimension.
 
-    Grain
-    -----
-    One row per calendar month.
-
-    Source
-    ------
-    Dates are collected from the four core Silver datasets:
-    generation, demand, emissions and carbon intensity.
-
-    Key strategy
+    Granularität
     ------------
-    The actual date column is used as the natural key.
+    Eine Zeile pro Kalendermonat.
 
-    No artificial date_id is introduced because the project operates at
-    monthly grain and the source date is already stable, unique and useful
-    for Power BI time intelligence.
+    Quelle
+    ------
+    Die Datumswerte werden aus den vier Core-Silver-Datensätzen gesammelt:
+    Generation, Demand, Emissions und Carbon Intensity.
 
-    Returns
-    -------
+    Schlüsselstrategie
+    ------------------
+    Die tatsächliche Spalte ``date`` wird als natürlicher Schlüssel verwendet.
+
+    Ein künstlicher ``date_id`` wird nicht eingeführt, da das Projekt auf
+    monatlicher Granularität arbeitet und das Quelldatum bereits stabil,
+    eindeutig und für Power-BI-Zeitlogik geeignet ist.
+
+    Rückgabe
+    --------
     pandas.DataFrame
-        Date dimension containing calendar attributes for reporting.
+        Datumsdimension mit Kalenderattributen für Reporting und Analyse.
     """
     dates = pd.concat(
         [
@@ -193,21 +198,21 @@ def build_dim_country(
     silver_datasets: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
     """
-    Build the country dimension.
+    Erzeuge die Länderdimension.
 
-    Grain
-    -----
-    One row per country.
-
-    Key strategy
+    Granularität
     ------------
-    entity_code is used as the business key.
+    Eine Zeile pro Land.
 
-    Returns
-    -------
+    Schlüsselstrategie
+    ------------------
+    ``entity_code`` wird als Business Key verwendet.
+
+    Rückgabe
+    --------
     pandas.DataFrame
-        Country dimension with country names and project-specific
-        business attributes.
+        Länderdimension mit Ländernamen und projektspezifischen fachlichen
+        Attributen.
     """
     countries = pd.concat(
         [
@@ -250,30 +255,31 @@ def build_dim_energy_series(
     config_path: str,
 ) -> pd.DataFrame:
     """
-    Build the reusable generation/emissions energy-series dimension.
+    Erzeuge die gemeinsame Energiereihen-Dimension für Generation und Emissions.
 
-    Grain
-    -----
-    One row per distinct generation/emissions Ember series.
+    Granularität
+    ------------
+    Eine Zeile pro eindeutiger Ember-Reihe aus Generation bzw. Emissions.
 
-    Source
+    Quelle
     ------
-    Series values are collected only from:
+    Reihennamen werden ausschließlich aus folgenden Datensätzen übernommen:
     - generation
     - emissions
 
-    Capacity is deliberately excluded because an identically named series
-    can carry different aggregate semantics there. For example, "Wind" is
-    non-aggregate in generation/emissions but aggregate in capacity.
+    Capacity wird bewusst ausgeschlossen, da eine gleich benannte Reihe dort
+    eine andere Aggregationssemantik besitzen kann. Beispielsweise ist ``Wind``
+    bei Generation/Emissions nicht aggregiert, bei Capacity jedoch aggregiert.
 
-    Business enrichment
-    -------------------
-    technology_group and energy_category are read from
-    config/series_config.yaml.
+    Fachliche Anreicherung
+    ----------------------
+    ``technology_group`` und ``energy_category`` werden aus
+    ``config/series_config.yaml`` gelesen.
 
-    Key strategy
-    ------------
-    series_key is a deterministic surrogate key generated from series_name.
+    Schlüsselstrategie
+    ------------------
+    ``series_key`` ist ein deterministischer Surrogatschlüssel, der aus
+    ``series_name`` erzeugt wird.
     """
     series_frames = []
 
@@ -361,22 +367,22 @@ def build_dim_capacity_series(
     capacity_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the installed-capacity series dimension.
+    Erzeuge die Reihendimension für installierte Kapazität.
 
-    Grain
-    -----
-    One row per distinct capacity series.
-
-    Why a separate dimension?
-    -------------------------
-    Capacity series do not always share the same aggregate semantics as
-    generation/emissions series with the same name. Keeping a dedicated
-    dimension prevents ambiguous mappings and duplicated fact rows.
-
-    Key strategy
+    Granularität
     ------------
-    capacity_series_key is a deterministic surrogate key generated from a
-    capacity-specific namespace plus the series name.
+    Eine Zeile pro eindeutiger Capacity-Reihe.
+
+    Warum eine separate Dimension?
+    ------------------------------
+    Capacity-Reihen teilen nicht immer dieselbe Aggregationssemantik wie
+    gleich benannte Reihen aus Generation bzw. Emissions. Eine eigene
+    Dimension verhindert mehrdeutige Zuordnungen und duplizierte Faktzeilen.
+
+    Schlüsselstrategie
+    ------------------
+    ``capacity_series_key`` ist ein deterministischer Surrogatschlüssel aus
+    einem Capacity-spezifischen Namespace und dem Reihennamen.
     """
     dim_capacity_series = (
         capacity_df[
@@ -416,7 +422,7 @@ def build_dim_capacity_series(
 
 
 # ---------------------------------------------------------------------
-# Shared fact-table helpers
+# Gemeinsame Hilfsfunktionen für Faktentabellen
 # ---------------------------------------------------------------------
 
 def add_series_key(
@@ -424,10 +430,10 @@ def add_series_key(
     dim_energy_series: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Add the surrogate energy-series key to a Silver dataset.
+    Ergänze einen Silver-Datensatz um den Surrogatschlüssel der Energiereihe.
 
-    validate="many_to_one" ensures every business series name maps to
-    exactly one generation/emissions dimension record.
+    ``validate="many_to_one"`` stellt sicher, dass jeder fachliche Reihenname
+    genau einem Dimensionsdatensatz für Generation/Emissions zugeordnet wird.
     """
     lookup = dim_energy_series[
         [
@@ -450,10 +456,10 @@ def add_capacity_series_key(
     dim_capacity_series: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Add the surrogate capacity-series key to a Silver capacity dataset.
+    Ergänze Silver-Capacity-Daten um den passenden Surrogatschlüssel.
 
-    validate="many_to_one" ensures every capacity series name maps to
-    exactly one capacity dimension record.
+    ``validate="many_to_one"`` stellt sicher, dass jeder Capacity-Reihenname
+    genau einem Datensatz der Capacity-Dimension zugeordnet wird.
     """
     lookup = dim_capacity_series[
         [
@@ -472,7 +478,7 @@ def add_capacity_series_key(
 
 
 # ---------------------------------------------------------------------
-# Fact builders
+# Aufbau der Faktentabellen
 # ---------------------------------------------------------------------
 
 def build_fact_generation(
@@ -480,11 +486,11 @@ def build_fact_generation(
     dim_energy_series: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the electricity-generation fact table.
+    Erzeuge die Faktentabelle zur Stromerzeugung.
 
-    Grain
-    -----
-    One country × one month × one energy series.
+    Granularität
+    ------------
+    Ein Land × ein Monat × eine Energiereihe.
     """
     fact = add_series_key(
         df,
@@ -507,11 +513,11 @@ def build_fact_emissions(
     dim_energy_series: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the power-sector-emissions fact table.
+    Erzeuge die Faktentabelle für Emissionen des Stromsektors.
 
-    Grain
-    -----
-    One country × one month × one energy series.
+    Granularität
+    ------------
+    Ein Land × ein Monat × eine Energiereihe.
     """
     fact = add_series_key(
         df,
@@ -533,11 +539,11 @@ def build_fact_demand(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the electricity-demand fact table.
+    Erzeuge die Faktentabelle für Stromnachfrage.
 
-    Grain
-    -----
-    One country × one month.
+    Granularität
+    ------------
+    Ein Land × ein Monat.
     """
     return df[
         [
@@ -552,11 +558,11 @@ def build_fact_carbon_intensity(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the carbon-intensity fact table.
+    Erzeuge die Faktentabelle für CO₂-Intensität.
 
-    Grain
-    -----
-    One country × one month.
+    Granularität
+    ------------
+    Ein Land × ein Monat.
     """
     return df[
         [
@@ -572,16 +578,16 @@ def build_fact_capacity(
     dim_capacity_series: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the installed-capacity fact table.
+    Erzeuge die Faktentabelle für installierte Kapazität.
 
-    Grain
-    -----
-    One country × one month × one capacity series.
+    Granularität
+    ------------
+    Ein Land × ein Monat × eine Capacity-Reihe.
 
-    Important limitation
-    --------------------
-    Capacity has narrower country and technology coverage than the four
-    core datasets. This source limitation is intentionally preserved.
+    Wichtige Einschränkung
+    ----------------------
+    Capacity besitzt eine geringere Länder- und Technologieabdeckung als die
+    vier Core-Datensätze. Diese Einschränkung der Quelle wird bewusst erhalten.
     """
     fact = add_capacity_series_key(
         df,
@@ -600,7 +606,7 @@ def build_fact_capacity(
 
 
 # ---------------------------------------------------------------------
-# Gold model orchestration
+# Orchestrierung des Gold-Modells
 # ---------------------------------------------------------------------
 
 def build_gold_model(
@@ -608,12 +614,12 @@ def build_gold_model(
     config_path: str,
 ) -> dict[str, pd.DataFrame]:
     """
-    Build the complete Gold-layer dimensional model.
+    Erzeuge das vollständige dimensionale Modell der Gold-Schicht.
 
-    Returns
-    -------
+    Rückgabe
+    --------
     dict[str, pandas.DataFrame]
-        Dictionary containing four dimensions and five fact tables.
+        Dictionary mit vier Dimensionen und fünf Faktentabellen.
     """
     dim_date = build_dim_date(
         silver_datasets
