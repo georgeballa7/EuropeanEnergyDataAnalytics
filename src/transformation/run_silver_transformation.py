@@ -1,11 +1,20 @@
 """
-Run the Bronze-to-Silver transformation pipeline.
+Führe die Transformation von Bronze nach Silver aus.
 
-Steps:
-1. Load Bronze JSON from S3
-2. Transform data
-3. Run Data Quality checks
-4. Write Silver Parquet to S3
+Ablauf
+------
+1. Lade die aktuelle Bronze-JSON-Datei aus Amazon S3.
+2. Bereinige und typisiere die Daten für die Silver-Schicht.
+3. Führe die definierten Data-Quality-Prüfungen aus.
+4. Schreibe ausschließlich validierte Silver-Daten als Parquet nach S3.
+
+Wichtiger aktueller Stand
+-------------------------
+Die Funktion lädt derzeit nur das zuletzt geschriebene Bronze-Objekt je
+Datensatz. Das ist korrekt, solange dieses Objekt einen vollständigen Snapshot
+enthält. Sobald Bronze echte append-only inkrementelle Dateien enthält, muss
+diese Ladestrategie erweitert werden, damit alle relevanten Objekte verarbeitet
+bzw. zu einem konsistenten Silver-Zustand zusammengeführt werden.
 """
 
 import json
@@ -39,6 +48,13 @@ EXPECTED_COUNTRIES = {
 
 
 def get_s3_client():
+    """
+    Erzeuge einen S3-Client mit dem lokalen AWS-Profil des Projekts.
+
+    Das benannte Profil ist für die lokale Entwicklung vorgesehen. In einer
+    produktiven AWS-Umgebung sollten IAM Roles und temporäre Credentials
+    bevorzugt werden.
+    """
     session = boto3.Session(
         profile_name=AWS_PROFILE,
         region_name=REGION_NAME,
@@ -52,9 +68,18 @@ def get_latest_bronze_key(
     dataset_name: str,
 ) -> str:
     """
-    Find the newest Bronze object for a dataset.
-    """
+    Ermittle das zuletzt geschriebene Bronze-JSON-Objekt eines Datensatzes.
 
+    Rückgabe
+    --------
+    str
+        S3-Objektschlüssel der neuesten JSON-Datei.
+
+    Raises
+    ------
+    FileNotFoundError
+        Wenn für den Datensatz kein Bronze-JSON-Objekt vorhanden ist.
+    """
     prefix = f"bronze/ember/{dataset_name}/"
 
     response = s3_client.list_objects_v2(
@@ -88,9 +113,12 @@ def load_bronze_dataframe(
     dataset_name: str,
 ) -> pd.DataFrame:
     """
-    Load the latest Bronze JSON file from S3.
-    """
+    Lade das neueste Bronze-JSON-Objekt aus S3 in einen pandas DataFrame.
 
+    Die vollständige Bronze-Datei enthält weiterhin die originale API-Antwort.
+    Für die Silver-Transformation wird daraus ausschließlich der Bereich
+    ``data`` in einen tabellarischen DataFrame überführt.
+    """
     key = get_latest_bronze_key(
         s3_client,
         dataset_name,
@@ -115,9 +143,12 @@ def process_dataset(
     dataset_name: str,
 ) -> None:
     """
-    Run Bronze-to-Silver processing for one dataset.
-    """
+    Verarbeite einen Datensatz vollständig von Bronze nach Silver.
 
+    Die Funktion lädt die Bronze-Daten, wendet die fachlichen
+    Transformationsregeln an, führt die Data-Quality-Prüfung aus und schreibt
+    das Ergebnis nur bei erfolgreicher Validierung nach S3.
+    """
     print(f"Processing: {dataset_name}")
 
     bronze_df = load_bronze_dataframe(
@@ -156,6 +187,7 @@ def process_dataset(
 
 
 def main():
+    """Führe die Bronze-to-Silver-Verarbeitung für alle Projektdatensätze aus."""
     s3_client = get_s3_client()
 
     for dataset_name in DATASETS:
