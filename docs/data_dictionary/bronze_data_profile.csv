@@ -1,0 +1,35 @@
+dataset,column,dtype,row_count,null_count,null_pct,unique_values,sample_values
+generation,entity,str,43900,0,0.0,20,"Ireland, Austria, Belgium"
+generation,entity_code,str,43900,0,0.0,20,"IRL, AUT, BEL"
+generation,is_aggregate_entity,bool,43900,0,0.0,1,False
+generation,date,str,43900,0,0.0,200,"2010-01-01, 2010-02-01, 2010-03-01"
+generation,series,str,43900,0,0.0,17,"Bioenergy, Clean, Coal"
+generation,is_aggregate_series,bool,43900,0,0.0,2,"False, True"
+generation,generation_twh,float64,43900,0,0.0,3485,"0.0, 0.34, 0.4"
+generation,share_of_generation_pct,float64,43900,0,0.0,10353,"0.0, 13.74, 15.93"
+demand,entity,str,2820,0,0.0,20,"Ireland, Austria, Belgium"
+demand,entity_code,str,2820,0,0.0,20,"IRL, AUT, BEL"
+demand,is_aggregate_entity,bool,2820,0,0.0,1,False
+demand,date,str,2820,0,0.0,200,"2010-01-01, 2010-02-01, 2010-03-01"
+demand,demand_twh,float64,2820,0,0.0,1531,"2.64, 2.35, 2.45"
+emissions,entity,str,43900,0,0.0,20,"Ireland, Austria, Belgium"
+emissions,entity_code,str,43900,0,0.0,20,"IRL, AUT, BEL"
+emissions,is_aggregate_entity,bool,43900,0,0.0,1,False
+emissions,date,str,43900,0,0.0,200,"2010-01-01, 2010-02-01, 2010-03-01"
+emissions,series,str,43900,0,0.0,17,"Bioenergy, Clean, Coal"
+emissions,is_aggregate_series,bool,43900,0,0.0,2,"False, True"
+emissions,emissions_mtco2,float64,43900,0,0.0,1385,"0.0, 0.41, 1.32"
+emissions,share_of_emissions_pct,float64,43900,0,0.0,6950,"0.0, 0.38, 30.88"
+carbon_intensity,entity,str,2820,0,0.0,20,"Ireland, Austria, Belgium"
+carbon_intensity,entity_code,str,2820,0,0.0,20,"IRL, AUT, BEL"
+carbon_intensity,is_aggregate_entity,bool,2820,0,0.0,1,False
+carbon_intensity,date,str,2820,0,0.0,200,"2010-01-01, 2010-02-01, 2010-03-01"
+carbon_intensity,emissions_intensity_gco2_per_kwh,float64,2820,0,0.0,2721,"527.28, 557.43, 513.39"
+capacity,entity,str,5268,0,0.0,12,"Poland, Portugal, Spain"
+capacity,entity_code,str,5268,0,0.0,12,"POL, PRT, ESP"
+capacity,is_aggregate_entity,bool,5268,0,0.0,1,False
+capacity,date,str,5268,0,0.0,128,"2016-01-01, 2016-02-01, 2016-03-01"
+capacity,series,str,5268,0,0.0,5,"Onshore wind, Solar, Wind"
+capacity,is_aggregate_series,bool,5268,0,0.0,2,"False, True"
+capacity,capacity_gw,float64,5268,0,0.0,2066,"4.97, 0.11, 0.0"
+capacity,capacity_w_per_capita,float64,5268,0,0.0,4110,"129.98, 2.87, 0.0"

@@ -38,6 +38,7 @@ data/curated/*
 # Airflow runtime files
 airflow/logs/*
 !airflow/logs/.gitkeep
+airflow/config/passwords.json
 
 # IDE / Editors
 .vscode/
@@ -63,3 +64,6 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+notebooks/newplot*.png
+

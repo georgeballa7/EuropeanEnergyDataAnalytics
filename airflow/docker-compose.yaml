@@ -1,0 +1,118 @@
+x-airflow-common: &airflow-common
+  image: european-energy-airflow:3.3.1
+
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+  env_file:
+    - ../.env
+
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver:8080/execution/"
+    AIRFLOW__API_AUTH__JWT_SECRET: "change-this-to-a-long-random-secret-at-least-64-characters-long"
+
+    AWS_PROFILE: energy-pipeline
+    AWS_DEFAULT_REGION: eu-central-1
+    PYTHONPATH: /opt/airflow/project
+
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ../src:/opt/airflow/project/src
+    - ../config:/opt/airflow/project/config
+    - ${USERPROFILE}/.aws:/home/airflow/.aws:ro
+
+
+services:
+
+  postgres:
+    image: postgres:16
+
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  airflow-init:
+    <<: *airflow-common
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    command: >
+      bash -c "airflow db migrate"
+
+
+  airflow-apiserver:
+    <<: *airflow-common
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver:8080/execution/"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:admin"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: "/opt/airflow/config/passwords.json"
+      AIRFLOW__API_AUTH__JWT_SECRET: "change-this-to-a-long-random-secret-at-least-64-characters-long"
+
+      AWS_PROFILE: energy-pipeline
+      AWS_DEFAULT_REGION: eu-central-1
+      PYTHONPATH: /opt/airflow/project
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ../src:/opt/airflow/project/src
+      - ../config:/opt/airflow/project/config
+      - ./config:/opt/airflow/config
+      - ${USERPROFILE}/.aws:/home/airflow/.aws:ro
+
+    ports:
+      - "8081:8080"
+
+    command: api-server
+
+
+  airflow-scheduler:
+    <<: *airflow-common
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-apiserver:
+        condition: service_started
+
+    command: scheduler
+
+
+  airflow-dag-processor:
+    <<: *airflow-common
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-apiserver:
+        condition: service_started
+
+    command: dag-processor
+
+
+volumes:
+  postgres_data:

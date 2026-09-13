@@ -1,0 +1,144 @@
+project:
+  name: EuropeanEnergyDataAnalytics
+  region: eu-central-1
+  bucket: european-energy-data-analytics-488658242500-eu-central-1-an
+
+source:
+  provider: ember
+  frequency: monthly
+  start_date: "2010-01"
+
+countries:
+  - DEU
+  - FRA
+  - ESP
+  - ITA
+  - GBR
+  - NLD
+  - BEL
+  - AUT
+  - POL
+  - CZE
+  - DNK
+  - SWE
+  - NOR
+  - FIN
+  - PRT
+  - IRL
+  - GRC
+  - ROU
+  - HUN
+  - CHE
+
+datasets:
+  generation:
+    api_dataset: electricity-generation
+    endpoint: /v1/electricity-generation/monthly
+
+  demand:
+    api_dataset: electricity-demand
+    endpoint: /v1/electricity-demand/monthly
+
+  emissions:
+    api_dataset: power-sector-emissions
+    endpoint: /v1/power-sector-emissions/monthly
+
+  carbon_intensity:
+    api_dataset: carbon-intensity
+    endpoint: /v1/carbon-intensity/monthly
+
+  capacity:
+    api_dataset: installed-capacity
+    endpoint: /v1/installed-capacity/monthly
+
+storage:
+  bronze_prefix: bronze/ember
+
+aws:
+  profile_name: energy-pipeline
+
+
+
+
+
+series:
+
+  Bioenergy:
+    technology_group: Bioenergy
+    energy_category: Renewable
+
+  Coal:
+    technology_group: Coal
+    energy_category: Fossil
+
+  Gas:
+    technology_group: Gas
+    energy_category: Fossil
+
+  Hydro:
+    technology_group: Hydro
+    energy_category: Renewable
+
+  Nuclear:
+    technology_group: Nuclear
+    energy_category: Clean
+
+  Solar:
+    technology_group: Solar
+    energy_category: Renewable
+
+  Wind:
+    technology_group: Wind
+    energy_category: Renewable
+
+  Onshore wind:
+    technology_group: Wind
+    energy_category: Renewable
+
+  Offshore wind:
+    technology_group: Wind
+    energy_category: Renewable
+
+  Unknown wind:
+    technology_group: Wind
+    energy_category: Renewable
+
+  Other renewables:
+    technology_group: Other renewables
+    energy_category: Renewable
+
+  Other fossil:
+    technology_group: Other fossil
+    energy_category: Fossil
+
+  Net imports:
+    technology_group: Net imports
+    energy_category: Flow
+
+  Clean:
+    technology_group: Clean
+    energy_category: Aggregate
+
+  Fossil:
+    technology_group: Fossil
+    energy_category: Aggregate
+
+  Renewables:
+    technology_group: Renewables
+    energy_category: Aggregate
+
+  Wind and solar:
+    technology_group: Wind and solar
+    energy_category: Aggregate
+
+  Hydro, bioenergy and other renewables:
+    technology_group: Hydro/bioenergy/other renewables
+    energy_category: Aggregate
+
+  Total generation:
+    technology_group: Total generation
+    energy_category: Aggregate
+
+  Demand:
+    technology_group: Demand
+    energy_category: System metric
