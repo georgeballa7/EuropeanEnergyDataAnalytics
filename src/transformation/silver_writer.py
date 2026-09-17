@@ -9,7 +9,6 @@ spaltenorientierte Parquet-Format und legt sie anschließend in S3 ab.
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
 
 import boto3
 import pandas as pd
@@ -45,16 +44,12 @@ def build_silver_s3_key(
     """
     Erzeuge den S3-Objektschlüssel für einen Silver-Datensatz.
 
-    Der UTC-Zeitstempel macht einzelne Silver-Snapshots unterscheidbar und
-    verhindert, dass ein bestehendes Objekt unbeabsichtigt überschrieben wird.
+    Silver verwendet einen stabilen Objektschlüssel. Nach erfolgreicher
+    Validierung ersetzt jeder Lauf den bisherigen vollständigen Snapshot.
     """
-    timestamp = datetime.now(
-        timezone.utc
-    ).strftime("%Y%m%dT%H%M%SZ")
-
     return (
         f"silver/ember/{dataset_name}/"
-        f"{dataset_name}_{timestamp}.parquet"
+        f"{dataset_name}.parquet"
     )
 
 
