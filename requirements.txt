@@ -1,6 +1,10 @@
 pandas
 requests
 python-dotenv
+boto3
+PyYAML
+pyarrow
 jupyter
 ipykernel
 matplotlib
+pytest

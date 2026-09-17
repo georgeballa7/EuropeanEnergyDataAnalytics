@@ -8,7 +8,11 @@ dependencies:
   - pandas
   - requests
   - python-dotenv
+  - boto3
+  - pyyaml
+  - pyarrow
   - jupyter
   - ipykernel
   - matplotlib
+  - pytest
   - pip
