@@ -3,20 +3,19 @@ Führe die Transformation von Bronze nach Silver aus.
 
 Ablauf
 ------
-1. Lade die aktuelle Bronze-JSON-Datei aus Amazon S3.
-2. Bereinige und typisiere die Daten für die Silver-Schicht.
-3. Führe die definierten Data-Quality-Prüfungen aus.
-4. Schreibe ausschließlich validierte Silver-Daten als Parquet nach S3.
+1. Lade das neueste Bronze-JSON-Inkrement aus Amazon S3.
+2. Bereinige und typisiere die neuen Daten für die Silver-Schicht.
+3. Lade den aktuellen Silver-Snapshot, sofern bereits einer existiert.
+4. Führe bestehenden Snapshot und neue Daten anhand des fachlichen Grains zusammen.
+5. Führe die definierten Data-Quality-Prüfungen auf dem vollständigen Zustand aus.
+6. Schreibe ausschließlich validierte Silver-Daten als Parquet nach S3.
 
-Wichtiger aktueller Stand
--------------------------
-Die Funktion lädt derzeit nur das zuletzt geschriebene Bronze-Objekt je
-Datensatz. Das ist korrekt, solange dieses Objekt einen vollständigen Snapshot
-enthält. Sobald Bronze echte append-only inkrementelle Dateien enthält, muss
-diese Ladestrategie erweitert werden, damit alle relevanten Objekte verarbeitet
-bzw. zu einem konsistenten Silver-Zustand zusammengeführt werden.
+Silver verwendet damit eine Snapshot-Semantik: Bronze bleibt append-only und
+quellnah, während der jeweils neueste Silver-Snapshot den vollständigen,
+bereinigten und deduplizierten Zustand eines Datensatzes repräsentiert.
 """
 
+import io
 import json
 
 import boto3
@@ -44,6 +43,14 @@ EXPECTED_COUNTRIES = {
     "NLD", "BEL", "AUT", "POL", "CZE",
     "DNK", "SWE", "NOR", "FIN", "PRT",
     "IRL", "GRC", "ROU", "HUN", "CHE",
+}
+
+BUSINESS_KEYS = {
+    "generation": ["entity_code", "date", "series"],
+    "demand": ["entity_code", "date"],
+    "emissions": ["entity_code", "date", "series"],
+    "carbon_intensity": ["entity_code", "date"],
+    "capacity": ["entity_code", "date", "series"],
 }
 
 
@@ -138,6 +145,94 @@ def load_bronze_dataframe(
     )
 
 
+def get_latest_silver_key(
+    s3_client,
+    dataset_name: str,
+) -> str | None:
+    """Ermittle den neuesten vorhandenen Silver-Snapshot eines Datensatzes."""
+    prefix = f"silver/ember/{dataset_name}/"
+
+    response = s3_client.list_objects_v2(
+        Bucket=BUCKET_NAME,
+        Prefix=prefix,
+    )
+
+    parquet_objects = [
+        obj
+        for obj in response.get("Contents", [])
+        if obj["Key"].endswith(".parquet")
+    ]
+
+    if not parquet_objects:
+        return None
+
+    latest_object = max(
+        parquet_objects,
+        key=lambda obj: obj["LastModified"],
+    )
+
+    return latest_object["Key"]
+
+
+def load_latest_silver_dataframe(
+    s3_client,
+    dataset_name: str,
+) -> pd.DataFrame | None:
+    """Lade den aktuellen Silver-Snapshot, sofern bereits einer existiert."""
+    key = get_latest_silver_key(
+        s3_client,
+        dataset_name,
+    )
+
+    if key is None:
+        return None
+
+    response = s3_client.get_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+    )
+
+    return pd.read_parquet(
+        io.BytesIO(response["Body"].read()),
+        engine="pyarrow",
+    )
+
+
+def merge_silver_snapshot(
+    current_silver_df: pd.DataFrame | None,
+    new_silver_df: pd.DataFrame,
+    dataset_name: str,
+) -> pd.DataFrame:
+    """
+    Führe bestehenden Silver-Snapshot und neue bereinigte Daten zusammen.
+
+    Der fachliche Schlüssel hängt vom Datensatz ab. Bei Überschneidungen
+    gewinnt die neu geladene Version, sodass wiederholte Verarbeitung keine
+    Duplikate im vollständigen Silver-Snapshot erzeugt.
+    """
+    if current_silver_df is None:
+        combined_df = new_silver_df.copy()
+    else:
+        combined_df = pd.concat(
+            [current_silver_df, new_silver_df],
+            ignore_index=True,
+        )
+
+    business_key = BUSINESS_KEYS[dataset_name]
+
+    combined_df = (
+        combined_df
+        .drop_duplicates(
+            subset=business_key,
+            keep="last",
+        )
+        .sort_values(business_key)
+        .reset_index(drop=True)
+    )
+
+    return combined_df
+
+
 def process_dataset(
     s3_client,
     dataset_name: str,
@@ -145,9 +240,9 @@ def process_dataset(
     """
     Verarbeite einen Datensatz vollständig von Bronze nach Silver.
 
-    Die Funktion lädt die Bronze-Daten, wendet die fachlichen
-    Transformationsregeln an, führt die Data-Quality-Prüfung aus und schreibt
-    das Ergebnis nur bei erfolgreicher Validierung nach S3.
+    Die Funktion bereinigt das neueste Bronze-Inkrement, führt es mit dem
+    bestehenden Silver-Snapshot zusammen, validiert den vollständigen neuen
+    Zustand und schreibt ihn nur bei erfolgreicher Data-Quality-Prüfung nach S3.
     """
     print(f"Processing: {dataset_name}")
 
@@ -156,9 +251,20 @@ def process_dataset(
         dataset_name,
     )
 
-    silver_df = clean_energy_data(
+    new_silver_df = clean_energy_data(
         bronze_df,
         dataset_name,
+    )
+
+    current_silver_df = load_latest_silver_dataframe(
+        s3_client,
+        dataset_name,
+    )
+
+    silver_df = merge_silver_snapshot(
+        current_silver_df=current_silver_df,
+        new_silver_df=new_silver_df,
+        dataset_name=dataset_name,
     )
 
     quality_result = validate_dataset(
