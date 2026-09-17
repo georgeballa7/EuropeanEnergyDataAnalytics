@@ -38,17 +38,8 @@ def parse_date(value: str) -> date:
 def next_month(value: date) -> date:
     """Gib den ersten Tag des auf ``value`` folgenden Monats zurück."""
     if value.month == 12:
-        return date(
-            year=value.year + 1,
-            month=1,
-            day=1,
-        )
-
-    return date(
-        year=value.year,
-        month=value.month + 1,
-        day=1,
-    )
+        return date(year=value.year + 1, month=1, day=1)
+    return date(year=value.year, month=value.month + 1, day=1)
 
 
 def normalize_project_start_date(value: str) -> date:
@@ -59,7 +50,6 @@ def normalize_project_start_date(value: str) -> date:
     """
     if len(value) == 7:
         value = f"{value}-01"
-
     return date.fromisoformat(value)
 
 
@@ -72,23 +62,17 @@ def run_ingestion() -> None:
     den State erst nach erfolgreicher Speicherung in S3.
     """
     config = load_config()
-
     countries = config["countries"]
     datasets = config["datasets"]
-
-    project_start_date = normalize_project_start_date(
-        config["source"]["start_date"]
-    )
+    project_start_date = normalize_project_start_date(config["source"]["start_date"])
 
     client = EmberClient()
-
     writer = S3Writer(
         bucket_name=config["project"]["bucket"],
         region_name=config["project"]["region"],
         profile_name=config["aws"].get("profile_name"),
         bronze_prefix=config["storage"]["bronze_prefix"],
     )
-
     state = IngestionState(
         bucket_name=config["project"]["bucket"],
         region_name=config["project"]["region"],
@@ -99,176 +83,102 @@ def run_ingestion() -> None:
     updated = 0
     skipped = 0
 
-    logger.info("Starting Ember incremental ingestion")
+    logger.info("Starte inkrementelle Ember-Ingestion.")
 
     for dataset_name, dataset_config in datasets.items():
         checked += 1
-
         endpoint = dataset_config["endpoint"]
         api_dataset = dataset_config["api_dataset"]
 
-        logger.info(
-            "Checking dataset: %s",
-            dataset_name,
+        logger.info("Prüfe Datensatz: %s", dataset_name)
+
+        latest_available_raw = client.get_latest_available_date(
+            dataset=api_dataset,
+            temporal_resolution="monthly",
         )
+        latest_available = parse_date(latest_available_raw)
 
-        # --------------------------------------------------
-        # 1. Leichtgewichtige Prüfung über die Ember Options API
-        # --------------------------------------------------
-
-        latest_available_raw = (
-            client.get_latest_available_date(
-                dataset=api_dataset,
-                temporal_resolution="monthly",
-            )
-        )
-
-        latest_available = parse_date(
-            latest_available_raw
-        )
-
-        # --------------------------------------------------
-        # 2. Persistenten Ingestion-State aus S3 lesen
-        # --------------------------------------------------
-
-        last_loaded_raw = state.get_last_source_date(
-            dataset_name
-        )
-
-        last_loaded = (
-            parse_date(last_loaded_raw)
-            if last_loaded_raw
-            else None
-        )
+        last_loaded_raw = state.get_last_source_date(dataset_name)
+        last_loaded = parse_date(last_loaded_raw) if last_loaded_raw else None
 
         logger.info(
-            "%s | last_loaded=%s | latest_available=%s",
+            "%s | zuletzt_geladen=%s | zuletzt_verfügbar=%s",
             dataset_name,
             last_loaded,
             latest_available,
         )
 
-        # --------------------------------------------------
-        # 3. Keine neuen Daten -> großen API-Aufruf überspringen
-        # --------------------------------------------------
-
-        if (
-            last_loaded is not None
-            and latest_available <= last_loaded
-        ):
+        if last_loaded is not None and latest_available <= last_loaded:
             logger.info(
-                "Skipping %s: no new data available.",
+                "Überspringe %s: Keine neuen Daten verfügbar.",
                 dataset_name,
             )
-
             skipped += 1
             continue
 
-        # --------------------------------------------------
-        # 4. Startpunkt für den inkrementellen Load bestimmen
-        # --------------------------------------------------
-
         if last_loaded is None:
             incremental_start = project_start_date
-
             logger.info(
-                "%s | No previous state found. "
-                "Starting initial load from %s.",
+                "%s | Kein vorheriger State vorhanden. Starte Initial Load ab %s.",
                 dataset_name,
                 incremental_start,
             )
-
         else:
-            incremental_start = next_month(
-                last_loaded
-            )
-
+            incremental_start = next_month(last_loaded)
             logger.info(
-                "%s | New data detected. Loading from %s.",
+                "%s | Neue Daten erkannt. Lade ab %s.",
                 dataset_name,
                 incremental_start,
             )
-
-        # --------------------------------------------------
-        # 5. Ausschließlich neue Quelldaten herunterladen
-        # --------------------------------------------------
 
         response = client.fetch_dataset(
             endpoint=endpoint,
             countries=countries,
             start_date=incremental_start.isoformat(),
         )
-
         data = response.get("data", [])
 
         if not data:
             logger.warning(
-                "%s | API returned no records. "
-                "State will not be changed.",
+                "%s | API lieferte keine Datensätze. State bleibt unverändert.",
                 dataset_name,
             )
-
             skipped += 1
             continue
 
         stats = response.get("stats", {})
-
         actual_latest_raw = (
-            stats
-            .get("query_value_range", {})
-            .get("date", {})
-            .get("max")
+            stats.get("query_value_range", {}).get("date", {}).get("max")
         )
 
         if actual_latest_raw is None:
             raise ValueError(
-                f"No source date found in response "
-                f"for {dataset_name}"
+                f"Kein Quelldatum in der API-Antwort für '{dataset_name}' gefunden."
             )
 
-        actual_latest = parse_date(
-            actual_latest_raw
-        )
-
-        # --------------------------------------------------
-        # 6. Originale API-Antwort in der Bronze-Schicht speichern
-        # --------------------------------------------------
-
-        s3_uri = writer.upload_raw_json(
-            data=response,
-            dataset=dataset_name,
-        )
+        actual_latest = parse_date(actual_latest_raw)
+        s3_uri = writer.upload_raw_json(data=response, dataset=dataset_name)
 
         logger.info(
-            "%s | Uploaded %s records to %s",
+            "%s | %s Datensätze nach %s hochgeladen.",
             dataset_name,
             len(data),
             s3_uri,
         )
 
-        # --------------------------------------------------
-        # 7. State erst nach erfolgreichem S3-Upload aktualisieren
-        # --------------------------------------------------
-
         state.update(
             dataset=dataset_name,
             last_source_date=actual_latest.isoformat(),
         )
-
         logger.info(
-            "%s | State updated to %s",
+            "%s | State auf %s aktualisiert.",
             dataset_name,
             actual_latest,
         )
-
         updated += 1
 
-    # ------------------------------------------------------
-    # Zusammenfassung für Airflow und Logs
-    # ------------------------------------------------------
-
     logger.info(
-        "INGESTION SUMMARY | checked=%s | updated=%s | skipped=%s",
+        "INGESTION-ZUSAMMENFASSUNG | geprüft=%s | aktualisiert=%s | übersprungen=%s",
         checked,
         updated,
         skipped,
@@ -280,5 +190,4 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-
     run_ingestion()
