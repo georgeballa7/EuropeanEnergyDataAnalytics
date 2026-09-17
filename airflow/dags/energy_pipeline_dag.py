@@ -1,3 +1,11 @@
+"""Orchestriere die monatliche European-Energy-Datenpipeline mit Airflow.
+
+Der DAG führt die Verarbeitung sequenziell von der inkrementellen
+Bronze-Ingestion über Silver und Gold bis zur Synchronisierung des AWS Glue
+Data Catalog aus. Fehlgeschlagene DAG-Läufe lösen eine Slack-Benachrichtigung
+aus.
+"""
+
 import pendulum
 
 from airflow.sdk import DAG, task
@@ -25,18 +33,22 @@ with DAG(
 
     @task
     def extract_and_load_bronze():
+        """Lade neue Ember-Quelldaten inkrementell in die Bronze-Schicht."""
         run_ingestion()
 
     @task
     def transform_bronze_to_silver():
+        """Bereinige und validiere Bronze-Daten für den Silver-Snapshot."""
         run_silver()
 
     @task
     def transform_silver_to_gold():
+        """Erzeuge und validiere das dimensionale Gold-Modell aus Silver."""
         run_gold()
 
     @task
     def synchronize_glue_catalog():
+        """Synchronisiere die Silver- und Gold-Tabellen mit dem Glue Catalog."""
         update_glue_catalog()
 
     bronze = extract_and_load_bronze()
