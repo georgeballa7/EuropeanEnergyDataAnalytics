@@ -1,8 +1,6 @@
-# Gold-Datenmodell – ERD
+# Gold Data Model – ERD
 
-Dieses Diagramm dokumentiert das analytische Gold-Modell des Projekts als **Fact Constellation / Galaxy Schema**.
-
-Mehrere Faktentabellen bilden unterschiedliche fachliche Prozesse ab und teilen sich gemeinsame Dimensionen. Die Beziehungen sind im Gold-Modell logisch definiert und werden später auch im semantischen Modell von Power BI verwendet.
+The analytical Gold layer uses a **Fact Constellation / Galaxy Schema**. Multiple fact tables represent different analytical processes while sharing conformed dimensions where their semantics are compatible.
 
 ```mermaid
 erDiagram
@@ -90,23 +88,21 @@ erDiagram
     }
 ```
 
-## Grain der Faktentabellen
+## Fact Table Grain
 
-| Faktentabelle | Grain |
+| Fact table | Grain |
 |---|---|
-| `fact_generation` | Land × Monat × Energiereihe |
-| `fact_emissions` | Land × Monat × Energiereihe |
-| `fact_demand` | Land × Monat |
-| `fact_carbon_intensity` | Land × Monat |
-| `fact_capacity` | Land × Monat × Kapazitätsreihe |
+| `fact_generation` | Country × month × energy series |
+| `fact_emissions` | Country × month × energy series |
+| `fact_demand` | Country × month |
+| `fact_carbon_intensity` | Country × month |
+| `fact_capacity` | Country × month × capacity series |
 
-## Schlüsselstrategie
+## Key Strategy
 
-- `dim_date` verwendet das Monatsdatum als stabilen natürlichen Schlüssel.
-- `dim_country` verwendet `entity_code` als stabilen Business Key.
-- `dim_energy_series` verwendet `series_key` als Surrogate Key für Generation und Emissionen.
-- `dim_capacity_series` verwendet einen separaten `capacity_series_key`, weil die Semantik einzelner Reihen – insbesondere `Wind` – zwischen Capacity und den übrigen Datensätzen unterschiedlich sein kann.
+- `dim_date` uses the monthly date as a stable natural key.
+- `dim_country` uses `entity_code` as a stable business key.
+- `dim_energy_series` uses `series_key` for generation and emissions.
+- `dim_capacity_series` uses a separate `capacity_series_key` because capacity-series aggregation semantics can differ from generation and emissions.
 
-## Architekturhinweis
-
-Die physischen Gold-Daten liegen als Parquet-Dateien in Amazon S3. Der AWS Glue Data Catalog verwaltet die Tabellenschemata und Amazon Athena verwendet diese Metadaten für serverlose SQL-Abfragen direkt auf S3. Die hier dargestellten PK-/FK-Beziehungen sind logische Modellbeziehungen und keine physisch erzwungenen Constraints in Athena.
+The PK/FK relationships shown here are logical analytical relationships. Athena does not physically enforce these constraints.
