@@ -11,68 +11,24 @@ künstlich imputiert.
 
 import pandas as pd
 
-
-# ---------------------------------------------------------------------
-# Projektkonfiguration
-# ---------------------------------------------------------------------
-
-CORE_DATASETS = {
-    "generation",
-    "demand",
-    "emissions",
-    "carbon_intensity",
-}
-
+CORE_DATASETS = {"generation", "demand", "emissions", "carbon_intensity"}
 SUPPORTED_DATASETS = CORE_DATASETS | {"capacity"}
-
 PROJECT_START_DATE = pd.Timestamp("2010-01-01")
 
-
-# ---------------------------------------------------------------------
-# Datensatzspezifische Schemadefinitionen
-# ---------------------------------------------------------------------
-
 DATASET_NUMERIC_COLUMNS = {
-    "generation": [
-        "generation_twh",
-        "share_of_generation_pct",
-    ],
-    "demand": [
-        "demand_twh",
-    ],
-    "emissions": [
-        "emissions_mtco2",
-        "share_of_emissions_pct",
-    ],
-    "carbon_intensity": [
-        "emissions_intensity_gco2_per_kwh",
-    ],
-    "capacity": [
-        "capacity_gw",
-        "capacity_w_per_capita",
-    ],
+    "generation": ["generation_twh", "share_of_generation_pct"],
+    "demand": ["demand_twh"],
+    "emissions": ["emissions_mtco2", "share_of_emissions_pct"],
+    "carbon_intensity": ["emissions_intensity_gco2_per_kwh"],
+    "capacity": ["capacity_gw", "capacity_w_per_capita"],
 }
-
 
 BOOLEAN_COLUMNS = {
-    "generation": [
-        "is_aggregate_entity",
-        "is_aggregate_series",
-    ],
-    "emissions": [
-        "is_aggregate_entity",
-        "is_aggregate_series",
-    ],
-    "capacity": [
-        "is_aggregate_entity",
-        "is_aggregate_series",
-    ],
+    "generation": ["is_aggregate_entity", "is_aggregate_series"],
+    "emissions": ["is_aggregate_entity", "is_aggregate_series"],
+    "capacity": ["is_aggregate_entity", "is_aggregate_series"],
 }
 
-
-# ---------------------------------------------------------------------
-# Validierung
-# ---------------------------------------------------------------------
 
 def validate_dataset_name(dataset_name: str) -> None:
     """
@@ -85,51 +41,28 @@ def validate_dataset_name(dataset_name: str) -> None:
     """
     if dataset_name not in SUPPORTED_DATASETS:
         raise ValueError(
-            f"Unsupported dataset: '{dataset_name}'. "
-            f"Expected one of: {sorted(SUPPORTED_DATASETS)}"
+            f"Nicht unterstützter Datensatz: '{dataset_name}'. "
+            f"Erwartet wird einer von: {sorted(SUPPORTED_DATASETS)}"
         )
 
 
-# ---------------------------------------------------------------------
-# Gemeinsame Transformationen
-# ---------------------------------------------------------------------
-
-def standardize_common_columns(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def standardize_common_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Standardisiere die von allen Ember-Datensätzen gemeinsam genutzten Spalten."""
     df = df.copy()
-
-    required_columns = {
-        "entity",
-        "entity_code",
-        "date",
-    }
-
+    required_columns = {"entity", "entity_code", "date"}
     missing_columns = required_columns - set(df.columns)
 
     if missing_columns:
         raise ValueError(
-            "Missing required common columns: "
+            "Fehlende gemeinsame Pflichtspalten: "
             f"{sorted(missing_columns)}"
         )
 
-    # Quelldatumswerte in analytisch nutzbare datetime-Werte umwandeln.
-    df["date"] = pd.to_datetime(
-        df["date"],
-        errors="raise",
-    )
-
-    # Explizite pandas-String-Datentypen verwenden.
+    df["date"] = pd.to_datetime(df["date"], errors="raise")
     df["entity"] = df["entity"].astype("string")
     df["entity_code"] = df["entity_code"].astype("string")
-
     return df
 
-
-# ---------------------------------------------------------------------
-# Datensatzspezifische Typtransformationen
-# ---------------------------------------------------------------------
 
 def standardize_dataset_types(
     df: pd.DataFrame,
@@ -143,39 +76,24 @@ def standardize_dataset_types(
     anstatt stillschweigend in fehlende Werte umgewandelt zu werden.
     """
     df = df.copy()
-
-    numeric_columns = DATASET_NUMERIC_COLUMNS[
-        dataset_name
-    ]
-
-    missing_numeric_columns = (
-        set(numeric_columns) - set(df.columns)
-    )
+    numeric_columns = DATASET_NUMERIC_COLUMNS[dataset_name]
+    missing_numeric_columns = set(numeric_columns) - set(df.columns)
 
     if missing_numeric_columns:
         raise ValueError(
-            f"Missing numeric columns for {dataset_name}: "
+            f"Fehlende numerische Spalten für '{dataset_name}': "
             f"{sorted(missing_numeric_columns)}"
         )
 
     for column in numeric_columns:
-        df[column] = pd.to_numeric(
-            df[column],
-            errors="raise",
-        )
+        df[column] = pd.to_numeric(df[column], errors="raise")
 
-    boolean_columns = BOOLEAN_COLUMNS.get(
-        dataset_name,
-        [],
-    )
-
-    missing_boolean_columns = (
-        set(boolean_columns) - set(df.columns)
-    )
+    boolean_columns = BOOLEAN_COLUMNS.get(dataset_name, [])
+    missing_boolean_columns = set(boolean_columns) - set(df.columns)
 
     if missing_boolean_columns:
         raise ValueError(
-            f"Missing boolean columns for {dataset_name}: "
+            f"Fehlende boolesche Spalten für '{dataset_name}': "
             f"{sorted(missing_boolean_columns)}"
         )
 
@@ -188,10 +106,6 @@ def standardize_dataset_types(
     return df
 
 
-# ---------------------------------------------------------------------
-# Projektumfang
-# ---------------------------------------------------------------------
-
 def apply_project_scope(
     df: pd.DataFrame,
     dataset_name: str,
@@ -200,47 +114,23 @@ def apply_project_scope(
     Wende den analytischen Zeitumfang des Projekts an.
 
     Die vier Core-Datensätze werden auf Januar 2010 und später begrenzt.
-
     Capacity behält seine ursprüngliche Quellabdeckung, da dieser Datensatz
     später beginnt und eine eingeschränktere Länder- und Technologieabdeckung
     besitzt.
     """
     df = df.copy()
-
     if dataset_name in CORE_DATASETS:
-        df = df[
-            df["date"] >= PROJECT_START_DATE
-        ].copy()
-
+        df = df[df["date"] >= PROJECT_START_DATE].copy()
     return df
 
 
-# ---------------------------------------------------------------------
-# Sortierung
-# ---------------------------------------------------------------------
-
-def sort_silver_data(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def sort_silver_data(df: pd.DataFrame) -> pd.DataFrame:
     """Sortiere Silver-Daten in eine deterministische analytische Reihenfolge."""
-    sort_columns = [
-        "entity_code",
-        "date",
-    ]
-
+    sort_columns = ["entity_code", "date"]
     if "series" in df.columns:
         sort_columns.append("series")
+    return df.sort_values(sort_columns).reset_index(drop=True)
 
-    return (
-        df
-        .sort_values(sort_columns)
-        .reset_index(drop=True)
-    )
-
-
-# ---------------------------------------------------------------------
-# Haupttransformation
-# ---------------------------------------------------------------------
 
 def clean_energy_data(
     df: pd.DataFrame,
@@ -267,19 +157,7 @@ def clean_energy_data(
     - Capacity behält seine ursprüngliche, eingeschränktere Abdeckung.
     """
     validate_dataset_name(dataset_name)
-
     df = standardize_common_columns(df)
-
-    df = standardize_dataset_types(
-        df,
-        dataset_name,
-    )
-
-    df = apply_project_scope(
-        df,
-        dataset_name,
-    )
-
-    df = sort_silver_data(df)
-
-    return df
+    df = standardize_dataset_types(df, dataset_name)
+    df = apply_project_scope(df, dataset_name)
+    return sort_silver_data(df)
