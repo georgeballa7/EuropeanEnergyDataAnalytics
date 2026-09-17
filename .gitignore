@@ -54,6 +54,7 @@ Thumbs.db
 # Test / coverage
 .coverage
 htmlcov/
+test.py
 
 # AWS / Terraform - local state and secrets
 .terraform/
@@ -66,4 +67,6 @@ htmlcov/
 *.temp
 
 notebooks/newplot*.png
+
+
 
