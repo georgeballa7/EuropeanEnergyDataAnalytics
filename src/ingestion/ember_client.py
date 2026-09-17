@@ -27,7 +27,7 @@ class EmberClient:
 
         if not self.api_key:
             raise ValueError(
-                "EMBER_API_KEY was not found in the environment."
+                "EMBER_API_KEY wurde nicht in der Umgebung gefunden."
             )
 
     def get_available_dates(
@@ -78,7 +78,7 @@ class EmberClient:
 
         if latest_date is None:
             raise ValueError(
-                f"No latest available date found for {dataset}"
+                f"Kein neuestes verfügbares Quelldatum für '{dataset}' gefunden."
             )
 
         return latest_date
