@@ -4,7 +4,16 @@ End-to-end ELT and analytics project for monthly European electricity data from 
 
 ## Architecture
 
-`Ember API → Airflow → Amazon S3 Bronze → Silver → Gold → AWS Glue → Amazon Athena → Power BI`
+```mermaid
+flowchart LR
+    API["Ember Energy API"] --> AF["Apache Airflow"]
+    AF --> B["S3 Bronze<br/>JSON · Incremental"]
+    B --> S["S3 Silver<br/>Parquet · Cleaned & Validated"]
+    S --> G["S3 Gold<br/>Dimensional Model"]
+    G --> GC["AWS Glue<br/>Data Catalog"]
+    GC --> AT["Amazon Athena"]
+    AT --> BI["Power BI"]
+```
 
 ## Tech Stack
 

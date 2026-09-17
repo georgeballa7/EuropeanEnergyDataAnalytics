@@ -2,29 +2,15 @@
 
 ## Overview
 
-```text
-Ember Energy API
-       │
-       ▼
-Apache Airflow
-       │
-       ▼
-Amazon S3 Bronze (JSON, append-only)
-       │
-       ▼
-Silver transformation + Data Quality
-       │
-       ▼
-Amazon S3 Silver (Parquet, validated snapshots)
-       │
-       ▼
-Gold dimensional modelling + Data Quality
-       │
-       ▼
-Amazon S3 Gold (Parquet, analytical snapshots)
-       │
-       ▼
-AWS Glue Data Catalog → Amazon Athena → Power BI
+```mermaid
+flowchart LR
+    API["Ember Energy API"] --> AF["Apache Airflow"]
+    AF --> B["Amazon S3 Bronze<br/>JSON · Append-only"]
+    B --> S["Amazon S3 Silver<br/>Parquet · Validated Snapshot"]
+    S --> G["Amazon S3 Gold<br/>Dimensional Model"]
+    G --> GC["AWS Glue<br/>Data Catalog"]
+    GC --> AT["Amazon Athena"]
+    AT --> BI["Power BI"]
 ```
 
 ## Bronze
@@ -51,10 +37,15 @@ The final analytical SQL queries are version-controlled under [`sql/analytics/`]
 
 ## Orchestration
 
-Apache Airflow executes the dependency chain:
+Apache Airflow executes the complete dependency chain:
 
-```text
-Bronze ingestion → Silver transformation → Gold transformation → Glue synchronization
+```mermaid
+flowchart LR
+    B["Bronze Ingestion"] --> S["Silver Transformation"]
+    S --> SDQ["Silver DQ"]
+    SDQ --> G["Gold Transformation"]
+    G --> GDQ["Gold DQ"]
+    GDQ --> C["Glue Catalog Sync"]
 ```
 
 The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications.
