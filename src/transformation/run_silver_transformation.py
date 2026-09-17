@@ -3,16 +3,20 @@ Führe die Transformation von Bronze nach Silver aus.
 
 Ablauf
 ------
-1. Lade das neueste Bronze-JSON-Inkrement aus Amazon S3.
-2. Bereinige und typisiere die neuen Daten für die Silver-Schicht.
+1. Lade alle vorhandenen Bronze-JSON-Inkremente aus Amazon S3.
+2. Bereinige und typisiere die Bronze-Daten für die Silver-Schicht.
 3. Lade den aktuellen Silver-Snapshot, sofern bereits einer existiert.
-4. Führe bestehenden Snapshot und neue Daten anhand des fachlichen Grains zusammen.
+4. Führe bestehenden Snapshot und Bronze-Daten anhand des fachlichen Grains zusammen.
 5. Führe die definierten Data-Quality-Prüfungen auf dem vollständigen Zustand aus.
 6. Schreibe ausschließlich validierte Silver-Daten als Parquet nach S3.
 
 Silver verwendet damit eine Snapshot-Semantik: Bronze bleibt append-only und
 quellnah, während der jeweils neueste Silver-Snapshot den vollständigen,
 bereinigten und deduplizierten Zustand eines Datensatzes repräsentiert.
+
+Alle Bronze-Inkremente werden berücksichtigt. Dadurch kann ein fehlgeschlagener
+Silver-Lauf nicht dazu führen, dass ein älteres, noch nicht im Snapshot
+enthaltenes Bronze-Inkrement bei einem späteren Lauf übersprungen wird.
 """
 
 import io
@@ -54,14 +58,14 @@ def get_s3_client():
     return session.client("s3")
 
 
-def get_latest_bronze_key(s3_client, dataset_name: str) -> str:
+def get_bronze_keys(s3_client, dataset_name: str) -> list[str]:
     """
-    Ermittle das zuletzt geschriebene Bronze-JSON-Objekt eines Datensatzes.
+    Ermittle alle vorhandenen Bronze-JSON-Objekte eines Datensatzes.
 
-    Rückgabe
-    --------
-    str
-        S3-Objektschlüssel der neuesten JSON-Datei.
+    Die Objekte werden chronologisch nach ``LastModified`` sortiert. Dadurch
+    werden ältere Inkremente vor neueren verarbeitet und spätere Werte können
+    bei identischen Business Keys deterministisch den vorherigen Stand
+    ersetzen.
 
     Raises
     ------
@@ -69,23 +73,47 @@ def get_latest_bronze_key(s3_client, dataset_name: str) -> str:
         Wenn für den Datensatz kein Bronze-JSON-Objekt vorhanden ist.
     """
     prefix = f"bronze/ember/{dataset_name}/"
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    json_objects = [
-        obj for obj in response.get("Contents", []) if obj["Key"].endswith(".json")
-    ]
+    json_objects = []
+    continuation_token = None
+
+    while True:
+        request = {
+            "Bucket": BUCKET_NAME,
+            "Prefix": prefix,
+        }
+        if continuation_token is not None:
+            request["ContinuationToken"] = continuation_token
+
+        response = s3_client.list_objects_v2(**request)
+        json_objects.extend(
+            obj for obj in response.get("Contents", []) if obj["Key"].endswith(".json")
+        )
+
+        if not response.get("IsTruncated"):
+            break
+        continuation_token = response["NextContinuationToken"]
+
     if not json_objects:
         raise FileNotFoundError(
             f"Kein Bronze-JSON für den Datensatz '{dataset_name}' gefunden."
         )
-    return max(json_objects, key=lambda obj: obj["LastModified"])["Key"]
+
+    return [
+        obj["Key"]
+        for obj in sorted(json_objects, key=lambda obj: (obj["LastModified"], obj["Key"]))
+    ]
 
 
-def load_bronze_dataframe(s3_client, dataset_name: str) -> pd.DataFrame:
-    """Lade das neueste Bronze-JSON aus S3 in einen pandas DataFrame."""
-    key = get_latest_bronze_key(s3_client, dataset_name)
-    response = s3_client.get_object(Bucket=BUCKET_NAME, Key=key)
-    payload = json.loads(response["Body"].read().decode("utf-8"))
-    return pd.DataFrame(payload["data"])
+def load_bronze_dataframes(s3_client, dataset_name: str) -> list[pd.DataFrame]:
+    """Lade alle Bronze-JSON-Inkremente eines Datensatzes aus S3."""
+    dataframes = []
+
+    for key in get_bronze_keys(s3_client, dataset_name):
+        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=key)
+        payload = json.loads(response["Body"].read().decode("utf-8"))
+        dataframes.append(pd.DataFrame(payload["data"]))
+
+    return dataframes
 
 
 def get_latest_silver_key(s3_client, dataset_name: str) -> str | None:
@@ -131,8 +159,14 @@ def merge_silver_snapshot(
 def process_dataset(s3_client, dataset_name: str) -> None:
     """Verarbeite einen Datensatz vollständig von Bronze nach Silver."""
     print(f"Verarbeite Datensatz: {dataset_name}")
-    bronze_df = load_bronze_dataframe(s3_client, dataset_name)
-    new_silver_df = clean_energy_data(bronze_df, dataset_name)
+
+    bronze_dataframes = load_bronze_dataframes(s3_client, dataset_name)
+    cleaned_dataframes = [
+        clean_energy_data(bronze_df, dataset_name)
+        for bronze_df in bronze_dataframes
+    ]
+    new_silver_df = pd.concat(cleaned_dataframes, ignore_index=True)
+
     current_silver_df = load_latest_silver_dataframe(s3_client, dataset_name)
     silver_df = merge_silver_snapshot(
         current_silver_df=current_silver_df,
