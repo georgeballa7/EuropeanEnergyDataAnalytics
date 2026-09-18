@@ -37,15 +37,13 @@ The final analytical SQL queries are version-controlled under [`sql/analytics/`]
 
 ## Orchestration
 
-Apache Airflow executes the complete dependency chain:
+Apache Airflow executes four pipeline tasks. The Silver and Gold data-quality checks run inside their respective transformation tasks rather than as separate Airflow tasks:
 
 ```mermaid
 flowchart LR
-    B["Bronze Ingestion"] --> S["Silver Transformation"]
-    S --> SDQ["Silver DQ"]
-    SDQ --> G["Gold Transformation"]
-    G --> GDQ["Gold DQ"]
-    GDQ --> C["Glue Catalog Sync"]
+    B["Bronze Ingestion"] --> S["Silver Transformation<br/>+ Silver DQ"]
+    S --> G["Gold Transformation<br/>+ Gold DQ"]
+    G --> C["Glue Catalog Sync"]
 ```
 
 The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications.
