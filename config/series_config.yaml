@@ -8,27 +8,51 @@ source:
   frequency: monthly
   start_date: "2010-01"
 
+# European markets available from Ember for the four core monthly datasets.
+# Albania, Andorra, Liechtenstein, Monaco, San Marino and Vatican City are not
+# available in the current Ember entity_code options and are therefore absent.
 countries:
-  - DEU
-  - FRA
-  - ESP
-  - ITA
-  - GBR
-  - NLD
-  - BEL
   - AUT
-  - POL
-  - CZE
-  - DNK
-  - SWE
-  - NOR
-  - FIN
-  - PRT
-  - IRL
-  - GRC
-  - ROU
-  - HUN
+  - BEL
+  - BGR
+  - BIH
+  - BLR
   - CHE
+  - CYP
+  - CZE
+  - DEU
+  - DNK
+  - ESP
+  - EST
+  - FIN
+  - FRA
+  - GBR
+  - GRC
+  - HRV
+  - HUN
+  - IRL
+  - ISL
+  - ITA
+  - LTU
+  - LUX
+  - LVA
+  - MDA
+  - MKD
+  - MLT
+  - MNE
+  - NLD
+  - NOR
+  - POL
+  - PRT
+  - ROU
+  - RUS
+  - SRB
+  - SVK
+  - SVN
+  - SWE
+  - TUR
+  - UKR
+  - XKX
 
 datasets:
   generation:
@@ -50,6 +74,23 @@ datasets:
   capacity:
     api_dataset: installed-capacity
     endpoint: /v1/installed-capacity/monthly
+    # Ember currently exposes monthly installed capacity for only this
+    # European subset. Dataset-specific scope prevents losing wider coverage
+    # from generation, demand, emissions and carbon intensity.
+    countries:
+      - BEL
+      - DEU
+      - DNK
+      - ESP
+      - FIN
+      - FRA
+      - GBR
+      - HUN
+      - ITA
+      - NLD
+      - POL
+      - PRT
+      - TUR
 
 storage:
   bronze_prefix: bronze/ember
@@ -57,12 +98,7 @@ storage:
 aws:
   profile_name: energy-pipeline
 
-
-
-
-
 series:
-
   Bioenergy:
     technology_group: Bioenergy
     energy_category: Renewable
