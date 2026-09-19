@@ -11,13 +11,15 @@ flowchart LR
     B --> S["S3 Silver<br/>Parquet · Cleaned & Validated"]
     S --> G["S3 Gold<br/>Dimensional Model"]
     G --> GC["AWS Glue<br/>Data Catalog"]
-    GC --> AT["Amazon Athena"]
+    GC --> AT["Amazon Athena<br/>Project Workgroup"]
     AT --> BI["Power BI"]
+
+    TF["Terraform"] -. provisions .-> AWS["S3 · Glue DB<br/>Athena · IAM"]
 ```
 
 ## Tech Stack
 
-Python · pandas · Apache Airflow · Docker · Amazon S3 · AWS Glue · Amazon Athena · Parquet · SQL · Power BI
+Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · Amazon S3 · AWS Glue · Amazon Athena · Parquet · SQL · Power BI
 
 ## Highlights
 
@@ -26,7 +28,10 @@ Python · pandas · Apache Airflow · Docker · Amazon S3 · AWS Glue · Amazon 
 - Automated Silver and Gold data-quality checks
 - Dimensional Gold model with conformed dimensions
 - Monthly Airflow orchestration and Slack failure notifications
-- Serverless SQL analytics with Athena
+- Infrastructure as Code for S3, Glue database, Athena workgroup and IAM
+- Versioned and encrypted S3 remote Terraform state with native locking
+- CI checks for pytest and Terraform formatting/validation
+- Serverless SQL analytics through a dedicated Athena workgroup
 - Power BI reporting across 20 European countries
 
 ## Power BI Dashboard

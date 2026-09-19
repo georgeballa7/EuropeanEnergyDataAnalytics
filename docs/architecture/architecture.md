@@ -9,9 +9,14 @@ flowchart LR
     B --> S["Amazon S3 Silver<br/>Parquet · Validated Snapshot"]
     S --> G["Amazon S3 Gold<br/>Dimensional Model"]
     G --> GC["AWS Glue<br/>Data Catalog"]
-    GC --> AT["Amazon Athena"]
+    GC --> AT["Amazon Athena<br/>Project Workgroup"]
     AT --> BI["Power BI"]
+
+    TF["Terraform<br/>Infrastructure as Code"] -. provisions .-> S3I["AWS Infrastructure<br/>S3 · Glue DB · Athena · IAM"]
+    TF -. remote state .-> TFS["S3 Terraform Backend<br/>Versioned · Encrypted · Locked"]
 ```
+
+Terraform manages the stable AWS infrastructure: the project S3 bucket configuration, Glue catalog database, dedicated Athena workgroup and runtime IAM policies/relationships. Terraform state is stored in a separate encrypted and versioned S3 backend with native state locking. Data-dependent Glue catalog tables remain pipeline-owned so Terraform and the runtime catalog synchronisation do not compete for the same resources.
 
 ## Bronze
 
@@ -31,23 +36,37 @@ Validated Silver datasets are transformed into a Fact Constellation / Galaxy mod
 
 ## Catalog and Analytics
 
-The controlled Silver and Gold schemas are registered explicitly in the AWS Glue Data Catalog. Amazon Athena uses this metadata to query Parquet directly in S3, providing a serverless SQL layer without a permanently running analytical database.
+The controlled Silver and Gold schemas are registered explicitly by the pipeline in the AWS Glue Data Catalog. The Glue database itself is infrastructure-managed by Terraform, while the 14 data-dependent catalog tables are pipeline-owned. This avoids configuration drift between Terraform and schema synchronisation.
+
+Amazon Athena queries Parquet directly in S3 through the dedicated `european-energy-analytics` workgroup, providing a serverless SQL layer without a permanently running analytical database. Query results are written to the project's `athena-results/` S3 prefix with SSE-S3 encryption. The runtime Athena policy restricts query operations to this workgroup while retaining the catalog metadata permissions required by the pipeline.
 
 The final analytical SQL queries are version-controlled under [`sql/analytics/`](../../sql/analytics/). Power BI consumes the Gold model through Athena in Import mode.
 
 ## Orchestration
 
-Apache Airflow executes four pipeline tasks. The Silver and Gold data-quality checks run inside their respective transformation tasks rather than as separate Airflow tasks:
+Apache Airflow orchestrates the runtime data flow; Terraform provisions the stable AWS resources used by that flow. The Silver and Gold data-quality checks execute inside their respective transformation tasks rather than as separate Airflow tasks:
 
 ```mermaid
 flowchart LR
     B["Bronze Ingestion"] --> S["Silver Transformation<br/>+ Silver DQ"]
     S --> G["Gold Transformation<br/>+ Gold DQ"]
-    G --> C["Glue Catalog Sync"]
+    G --> C["Glue Catalog Sync<br/>Silver + Gold tables"]
+    C --> A["Athena<br/>european-energy-analytics"]
+
+    TF["Terraform"] -. provisions .-> AWS["S3 · Glue Database<br/>Athena Workgroup · IAM"]
+    AWS -. supports .-> B
+    AWS -. supports .-> C
+    AWS -. supports .-> A
 ```
 
-The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications.
+The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
+
+## Infrastructure as Code
+
+Terraform configuration lives under [`infra/terraform/`](../../infra/terraform/). Existing AWS resources were imported where appropriate, while the dedicated Athena workgroup was provisioned directly through Terraform. The remote backend is separate from the analytics data bucket and uses S3 versioning, SSE-S3 encryption, public-access blocking and S3-native state locking.
+
+CI performs Terraform formatting and validation checks without AWS credentials or automated `terraform apply`. Infrastructure changes therefore remain an explicit reviewed operation rather than an automatic deployment from CI.
 
 ## Security
 
-The pipeline uses a dedicated least-privilege AWS identity. Destructive S3 permissions are deliberately excluded from the pipeline identity. Local development uses an AWS CLI profile; a production deployment should prefer IAM roles and temporary credentials.
+The pipeline uses a dedicated least-privilege AWS identity. Destructive S3 permissions are deliberately excluded from the pipeline identity, and Athena query actions are scoped to the project workgroup. Local development uses AWS CLI profiles; access keys and administrative identities are intentionally outside Terraform management. A production deployment should prefer IAM roles and temporary credentials.
