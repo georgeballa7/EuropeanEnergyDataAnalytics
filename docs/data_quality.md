@@ -11,7 +11,7 @@ Each dataset has an explicit business key and required measurement columns. Vali
 - null values in business-key and measurement columns
 - unexpected countries outside the configured project scope
 
-The validation deliberately does not require every dataset to contain all 20 countries because source coverage differs, particularly for installed capacity. Detailed Silver rules are available in [`silver_data_quality_guidelines.md`](decisions/silver_data_quality_guidelines.md).
+The validation deliberately does not require every dataset to contain every configured European market because source coverage differs by dataset. Generation, demand, emissions and carbon intensity use the 41-market European project scope, while installed capacity uses its configured Ember-supported subset. Detailed Silver rules are available in [`silver_data_quality_guidelines.md`](decisions/silver_data_quality_guidelines.md).
 
 ## Gold
 

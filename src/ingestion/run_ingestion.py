@@ -59,10 +59,12 @@ def run_ingestion() -> None:
 
     Die Pipeline prüft zunächst die Datenverfügbarkeit, vergleicht sie mit dem
     persistenten Ladezustand, lädt ausschließlich neue Daten und aktualisiert
-    den State erst nach erfolgreicher Speicherung in S3.
+    den State erst nach erfolgreicher Speicherung in S3. Standardmäßig gilt
+    der europäische Projektscope; Datensätze mit geringerer Quellabdeckung
+    können ihre eigene Länderliste konfigurieren.
     """
     config = load_config()
-    countries = config["countries"]
+    project_countries = config["countries"]
     datasets = config["datasets"]
     project_start_date = normalize_project_start_date(config["source"]["start_date"])
 
@@ -89,8 +91,13 @@ def run_ingestion() -> None:
         checked += 1
         endpoint = dataset_config["endpoint"]
         api_dataset = dataset_config["api_dataset"]
+        countries = dataset_config.get("countries", project_countries)
 
-        logger.info("Prüfe Datensatz: %s", dataset_name)
+        logger.info(
+            "Prüfe Datensatz: %s | Länder=%s",
+            dataset_name,
+            len(countries),
+        )
 
         latest_available_raw = client.get_latest_available_date(
             dataset=api_dataset,

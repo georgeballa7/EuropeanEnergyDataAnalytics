@@ -18,11 +18,19 @@ flowchart LR
 
 Terraform manages the stable AWS infrastructure: the project S3 bucket configuration, Glue catalog database, dedicated Athena workgroup and runtime IAM policies/relationships. Terraform state is stored in a separate encrypted and versioned S3 backend with native state locking. Data-dependent Glue catalog tables remain pipeline-owned so Terraform and the runtime catalog synchronisation do not compete for the same resources.
 
+## Source Scope
+
+The configured analytical scope contains 41 Ember-supported European markets. Electricity generation, demand, power-sector emissions and carbon intensity use this common scope. Installed capacity uses a dataset-specific subset because Ember exposes monthly capacity data for fewer European markets.
+
+Geographic scope is configuration-driven rather than embedded in transformation logic, allowing source coverage to evolve without changing the core pipeline.
+
 ## Bronze
 
 The ingestion layer retrieves monthly electricity data from the Ember Energy API. Before downloading a dataset, the pipeline checks the latest available source month and compares it with a persistent ingestion state stored in S3. Only new source periods are requested.
 
 Bronze stores the complete API response as JSON and remains append-only, preserving source-faithful ingestion history and traceability. A profile of the Bronze source data is available in [`docs/data_dictionary/bronze_data_profile.csv`](../data_dictionary/bronze_data_profile.csv).
+
+Historical scope expansions use a separate targeted backfill entry point. Backfills load explicitly selected countries from the configured historical start date, respect dataset-specific country coverage and write the source response to Bronze without reading or modifying the regular incremental ingestion state. Downstream Silver and Gold snapshots are then rebuilt and validated from the expanded Bronze history.
 
 ## Silver
 
@@ -44,7 +52,7 @@ The final analytical SQL queries are version-controlled under [`sql/analytics/`]
 
 ## Orchestration
 
-Apache Airflow orchestrates the runtime data flow; Terraform provisions the stable AWS resources used by that flow. The Silver and Gold data-quality checks execute inside their respective transformation tasks rather than as separate Airflow tasks:
+Apache Airflow orchestrates the regular runtime data flow; Terraform provisions the stable AWS resources used by that flow. The Silver and Gold data-quality checks execute inside their respective transformation tasks rather than as separate Airflow tasks:
 
 ```mermaid
 flowchart LR
@@ -59,7 +67,7 @@ flowchart LR
     AWS -. supports .-> A
 ```
 
-The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
+The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
 
 ## Infrastructure as Code
 
