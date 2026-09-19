@@ -12,6 +12,14 @@ Bronze uses JSON to preserve the source response with minimal transformation. Si
 
 Bronze is append-only and stores incremental source loads for traceability. Silver maintains one stable, complete cleaned snapshot per dataset. Gold maintains one stable validated analytical snapshot per dimension or fact table. This keeps downstream consumption simple while retaining raw ingestion history.
 
+## Explicit Historical Backfills
+
+The regular ingestion path remains state-driven and incremental. Historical scope expansions use a separate backfill workflow that accepts explicit countries and optional datasets, respects dataset-specific source coverage and writes to Bronze without changing the regular ingestion state. This separates exceptional historical loading from the scheduled monthly path while allowing the existing Silver and Gold merge logic to rebuild validated snapshots.
+
+## Configuration-Driven Geographic Scope
+
+The project uses a shared 41-market European scope for generation, demand, emissions and carbon intensity. Datasets with narrower source availability can override that scope in configuration; installed capacity currently uses this mechanism. This keeps source limitations explicit without reducing coverage for unrelated datasets.
+
 ## pandas Instead of Spark
 
 The current data volume does not justify distributed processing. pandas keeps the implementation simpler and cheaper while meeting the workload requirements. Spark would become appropriate if data volume or processing complexity exceeded a single-machine workload.
