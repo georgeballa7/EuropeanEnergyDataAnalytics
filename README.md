@@ -24,15 +24,24 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 ## Highlights
 
 - Incremental monthly API ingestion with persistent S3 state
+- Targeted historical backfills for controlled scope expansion without modifying incremental state
 - Bronze / Silver / Gold medallion architecture
 - Automated Silver and Gold data-quality checks
 - Dimensional Gold model with conformed dimensions
+- Coverage of 41 Ember-supported European markets across the core monthly datasets
+- Dataset-specific source coverage for installed capacity
 - Monthly Airflow orchestration and Slack failure notifications
 - Infrastructure as Code for S3, Glue database, Athena workgroup and IAM
 - Versioned and encrypted S3 remote Terraform state with native locking
 - CI checks for pytest and Terraform formatting/validation
-- Serverless SQL analytics through a dedicated Athena workgroup
-- Power BI reporting across 20 European countries
+- Serverless SQL analytics through the dedicated `european-energy-analytics` Athena workgroup
+- Power BI reporting over the Gold model through Athena
+
+## Data Coverage
+
+The project scope contains 41 European markets available from Ember. Electricity generation, demand, power-sector emissions and carbon intensity use the full configured European scope. Installed capacity uses a smaller dataset-specific country scope because Ember provides monthly capacity data for fewer markets.
+
+The regular pipeline remains incremental. Historical scope expansions are handled through an explicit backfill workflow that writes source responses to Bronze without changing the persistent incremental ingestion state. Silver and Gold snapshots are then rebuilt and validated from the expanded source history.
 
 ## Power BI Dashboard
 
