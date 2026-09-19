@@ -25,6 +25,7 @@ import json
 import boto3
 import pandas as pd
 
+from config.settings import load_config
 from src.quality.data_quality import validate_dataset
 from src.transformation.clean_energy_data import clean_energy_data
 from src.transformation.silver_writer import write_silver_to_s3
@@ -33,10 +34,6 @@ BUCKET_NAME = "european-energy-data-analytics-488658242500-eu-central-1-an"
 AWS_PROFILE = "energy-pipeline"
 REGION_NAME = "eu-central-1"
 DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
-EXPECTED_COUNTRIES = {
-    "DEU", "FRA", "ESP", "ITA", "GBR", "NLD", "BEL", "AUT", "POL", "CZE",
-    "DNK", "SWE", "NOR", "FIN", "PRT", "IRL", "GRC", "ROU", "HUN", "CHE",
-}
 BUSINESS_KEYS = {
     "generation": ["entity_code", "date", "series"],
     "demand": ["entity_code", "date"],
@@ -56,6 +53,12 @@ def get_s3_client():
     """
     session = boto3.Session(profile_name=AWS_PROFILE, region_name=REGION_NAME)
     return session.client("s3")
+
+
+def get_expected_countries(dataset_name: str) -> list[str]:
+    """Lade den erwarteten Länderscope eines Datensatzes aus der YAML-Konfiguration."""
+    config = load_config()
+    return config["datasets"][dataset_name].get("countries", config["countries"])
 
 
 def get_bronze_keys(s3_client, dataset_name: str) -> list[str]:
@@ -173,7 +176,11 @@ def process_dataset(s3_client, dataset_name: str) -> None:
         new_silver_df=new_silver_df,
         dataset_name=dataset_name,
     )
-    quality_result = validate_dataset(silver_df, dataset_name, EXPECTED_COUNTRIES)
+    quality_result = validate_dataset(
+        silver_df,
+        dataset_name,
+        get_expected_countries(dataset_name),
+    )
 
     if not quality_result["passed"]:
         raise ValueError(
