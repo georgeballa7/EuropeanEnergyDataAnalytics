@@ -56,17 +56,20 @@ Thumbs.db
 htmlcov/
 test.py
 
-# AWS / Terraform - local state and secrets
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-
 # Temporary files
 *.tmp
 *.temp
 
 notebooks/newplot*.png
+
+# Terraform - local state, cache and secrets
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
 
 
 
