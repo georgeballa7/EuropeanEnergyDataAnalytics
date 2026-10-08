@@ -136,6 +136,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     actions = [
       "s3:ListBucket",
       "s3:GetBucketLocation",
+      "s3:GetBucketPolicy",
       "s3:GetBucketPublicAccessBlock",
       "s3:PutBucketPublicAccessBlock",
       "s3:GetEncryptionConfiguration",
@@ -160,6 +161,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "glue:CreateDatabase",
       "glue:GetDatabase",
       "glue:GetDatabases",
+      "glue:GetTags",
       "glue:UpdateDatabase",
       "glue:DeleteDatabase"
     ]
@@ -226,6 +228,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
 
     actions = [
       "iam:GetUser",
+      "iam:ListGroupsForUser",
       "iam:ListAttachedUserPolicies",
       "iam:AttachUserPolicy",
       "iam:DetachUserPolicy"
