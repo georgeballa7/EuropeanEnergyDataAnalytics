@@ -142,9 +142,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "s3:GetBucketWebsite",
       "s3:GetBucketTagging",
       "s3:GetBucketPublicAccessBlock",
-      "s3:PutBucketPublicAccessBlock",
       "s3:GetEncryptionConfiguration",
-      "s3:PutEncryptionConfiguration",
       "s3:GetBucketLogging",
       "s3:GetBucketVersioning",
       "s3:GetBucketRequestPayment",
@@ -172,11 +170,9 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     effect = "Allow"
 
     actions = [
-      "glue:CreateDatabase",
       "glue:GetDatabase",
       "glue:GetDatabases",
-      "glue:GetTags",
-      "glue:UpdateDatabase"
+      "glue:GetTags"
     ]
 
     resources = [
@@ -194,11 +190,9 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     effect = "Allow"
 
     actions = [
-      "athena:CreateWorkGroup",
       "athena:GetWorkGroup",
       "athena:ListWorkGroups",
-      "athena:ListTagsForResource",
-      "athena:UpdateWorkGroup"
+      "athena:ListTagsForResource"
     ]
 
     resources = [
@@ -218,9 +212,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     actions = [
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
-      "iam:ListPolicyVersions",
-      "iam:CreatePolicyVersion",
-      "iam:SetDefaultPolicyVersion"
+      "iam:ListPolicyVersions"
     ]
 
     resources = [
@@ -252,62 +244,6 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
 
 
   # ----------------------------------------------------------
-  # Restricted runtime user policy attachments
-  # ----------------------------------------------------------
-
-  statement {
-    sid    = "RestrictedRuntimeUserPolicyAttachments"
-    effect = "Allow"
-
-    actions = [
-      "iam:AttachUserPolicy",
-      "iam:DetachUserPolicy"
-    ]
-
-    resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.runtime_user_name}"
-    ]
-
-    condition {
-      test     = "ArnEquals"
-      variable = "iam:PolicyARN"
-
-      values = [
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.glue_policy_name}",
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.athena_policy_name}"
-      ]
-    }
-  }
-
-  # ----------------------------------------------------------
-  # Restricted runtime group policy attachments
-  # ----------------------------------------------------------
-
-  statement {
-    sid    = "RestrictedRuntimeGroupPolicyAttachments"
-    effect = "Allow"
-
-    actions = [
-      "iam:AttachGroupPolicy",
-      "iam:DetachGroupPolicy"
-    ]
-
-    resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/${var.runtime_group_name}"
-    ]
-
-    condition {
-      test     = "ArnEquals"
-      variable = "iam:PolicyARN"
-
-      values = [
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.s3_policy_name}"
-      ]
-    }
-  }
-
-
-  # ----------------------------------------------------------
   # Runtime IAM group
   # ----------------------------------------------------------
 
@@ -325,19 +261,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
   }
 
-  statement {
-    sid    = "ProjectIAMGroupMembership"
-    effect = "Allow"
 
-    actions = [
-      "iam:AddUserToGroup",
-      "iam:RemoveUserFromGroup"
-    ]
-
-    resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/${var.runtime_group_name}"
-    ]
-  }
 }
 
 
@@ -360,4 +284,55 @@ resource "aws_iam_policy" "github_terraform_deploy" {
 resource "aws_iam_role_policy_attachment" "github_terraform_deploy" {
   role       = aws_iam_role.github_terraform_deploy.name
   policy_arn = aws_iam_policy.github_terraform_deploy.arn
+}
+
+# ------------------------------------------------------------
+# Restricted role for manually approved Terraform apply
+# ------------------------------------------------------------
+
+resource "aws_iam_role" "github_terraform_apply" {
+  name               = "GitHubTerraformApplyRole"
+  description        = "Restricted role for manually approved Terraform apply jobs."
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+}
+
+data "aws_iam_policy_document" "github_terraform_apply_permissions" {
+  source_policy_documents = [
+    data.aws_iam_policy_document.github_terraform_deploy_permissions.json
+  ]
+
+  statement {
+    sid       = "ApplyDataLakeBucketSettings"
+    effect    = "Allow"
+    actions   = ["s3:PutBucketPublicAccessBlock", "s3:PutEncryptionConfiguration"]
+    resources = ["arn:aws:s3:::${var.data_bucket_name}"]
+  }
+
+  statement {
+    sid     = "ApplyGlueDatabase"
+    effect  = "Allow"
+    actions = ["glue:CreateDatabase", "glue:UpdateDatabase"]
+    resources = [
+      "arn:aws:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:catalog",
+      "arn:aws:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:database/european_energy_analytics"
+    ]
+  }
+
+  statement {
+    sid       = "ApplyAthenaWorkgroup"
+    effect    = "Allow"
+    actions   = ["athena:CreateWorkGroup", "athena:UpdateWorkGroup"]
+    resources = ["arn:aws:athena:${var.aws_region}:${data.aws_caller_identity.current.account_id}:workgroup/european-energy-analytics"]
+  }
+}
+
+resource "aws_iam_policy" "github_terraform_apply" {
+  name        = "EuropeanEnergyGitHubTerraformApply"
+  description = "Restricted permissions for manually approved Terraform apply jobs."
+  policy      = data.aws_iam_policy_document.github_terraform_apply_permissions.json
+}
+
+resource "aws_iam_role_policy_attachment" "github_terraform_apply" {
+  role       = aws_iam_role.github_terraform_apply.name
+  policy_arn = aws_iam_policy.github_terraform_apply.arn
 }
