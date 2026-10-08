@@ -139,10 +139,22 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "s3:GetBucketPolicy",
       "s3:GetBucketAcl",
       "s3:GetBucketCORS",
+      "s3:GetBucketWebsite",
+      "s3:GetBucketTagging",
       "s3:GetBucketPublicAccessBlock",
       "s3:PutBucketPublicAccessBlock",
       "s3:GetEncryptionConfiguration",
-      "s3:PutEncryptionConfiguration"
+      "s3:PutEncryptionConfiguration",
+      "s3:GetBucketLogging",
+      "s3:GetBucketVersioning",
+      "s3:GetBucketRequestPayment",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetReplicationConfiguration",
+      "s3:GetAccelerateConfiguration",
+      "s3:GetBucketNotification",
+      "s3:GetBucketOwnershipControls",
+      "s3:GetBucketPolicyStatus"
     ]
 
     resources = [
@@ -186,6 +198,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "athena:CreateWorkGroup",
       "athena:GetWorkGroup",
       "athena:ListWorkGroups",
+      "athena:ListTagsForResource",
       "athena:UpdateWorkGroup"
     ]
 
