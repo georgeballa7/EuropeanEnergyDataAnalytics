@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   terraform-plan:
+    env:
+      TF_VAR_sns_alert_email: ${{ vars.SNS_ALERT_EMAIL }}
     name: Terraform Plan
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -78,6 +80,8 @@ jobs:
           if-no-files-found: error
 
   terraform-apply:
+    env:
+      TF_VAR_sns_alert_email: ${{ vars.SNS_ALERT_EMAIL }}
     name: Terraform Apply (manual approval)
     if: inputs.apply && github.ref == 'refs/heads/main'
     needs: terraform-plan
