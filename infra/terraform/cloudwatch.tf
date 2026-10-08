@@ -59,7 +59,11 @@ resource "aws_cloudwatch_dashboard" "energy_pipeline" {
               "AWS/Athena",
               "TotalExecutionTime",
               "WorkGroup",
-              aws_athena_workgroup.energy_analytics.name
+              aws_athena_workgroup.energy_analytics.name,
+              "QueryState",
+              "SUCCEEDED",
+              "QueryType",
+              "DML"
             ]
           ]
         }
