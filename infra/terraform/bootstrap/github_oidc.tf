@@ -53,7 +53,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
 
       values = [
-        "repo:georgeballa7/EuropeanEnergyDataAnalytics:environment:production"
+        "repo:georgeballa7@245966496/EuropeanEnergyDataAnalytics@1368037476:environment:production"
       ]
     }
   }
