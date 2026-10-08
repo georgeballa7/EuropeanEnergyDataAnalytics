@@ -1,4 +1,11 @@
 # ------------------------------------------------------------
+# AWS account information
+# ------------------------------------------------------------
+
+data "aws_caller_identity" "current" {}
+
+
+# ------------------------------------------------------------
 # GitHub Actions OIDC provider
 # ------------------------------------------------------------
 
@@ -9,7 +16,6 @@ resource "aws_iam_openid_connect_provider" "github" {
     "sts.amazonaws.com"
   ]
 }
-
 
 
 # ------------------------------------------------------------
@@ -59,13 +65,11 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 # ------------------------------------------------------------
 
 resource "aws_iam_role" "github_terraform_deploy" {
-  name = "GitHubTerraformDeployRole"
+  name        = "GitHubTerraformDeployRole"
+  description = "Role assumed by GitHub Actions via OIDC for Terraform deployments."
 
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
-
-  description = "Role assumed by GitHub Actions via OIDC for Terraform deployments."
 }
-
 
 
 # ------------------------------------------------------------
@@ -87,7 +91,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:s3:::european-energy-terraform-state-488658242500-eu-central-1"
+      "arn:aws:s3:::${var.terraform_state_bucket_name}"
     ]
   }
 
@@ -101,7 +105,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:s3:::european-energy-terraform-state-488658242500-eu-central-1/european-energy/terraform.tfstate"
+      "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}"
     ]
   }
 
@@ -116,11 +120,9 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:s3:::european-energy-terraform-state-488658242500-eu-central-1/european-energy/terraform.tfstate.tflock"
+      "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}.tflock"
     ]
   }
-}
-
 
 
   # ----------------------------------------------------------
@@ -134,23 +136,19 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     actions = [
       "s3:ListBucket",
       "s3:GetBucketLocation",
-
       "s3:GetBucketPublicAccessBlock",
       "s3:PutBucketPublicAccessBlock",
-
       "s3:GetEncryptionConfiguration",
       "s3:PutEncryptionConfiguration"
     ]
 
     resources = [
-      aws_s3_bucket.energy_data.arn
+      "arn:aws:s3:::${var.data_bucket_name}"
     ]
   }
 
 
-
-
-    # ----------------------------------------------------------
+  # ----------------------------------------------------------
   # AWS Glue Data Catalog
   # ----------------------------------------------------------
 
@@ -170,9 +168,6 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "*"
     ]
   }
-
-
-
 
 
   # ----------------------------------------------------------
@@ -196,9 +191,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
   }
 
 
-
-
-    # ----------------------------------------------------------
+  # ----------------------------------------------------------
   # Project IAM managed policies
   # ----------------------------------------------------------
 
@@ -216,15 +209,18 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      aws_iam_policy.s3_access.arn,
-      aws_iam_policy.glue_catalog_access.arn,
-      aws_iam_policy.athena_access.arn
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.s3_policy_name}",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.glue_policy_name}",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.athena_policy_name}"
     ]
   }
 
 
+  # ----------------------------------------------------------
+  # Runtime user policy attachments
+  # ----------------------------------------------------------
 
-    statement {
+  statement {
     sid    = "ProjectIAMUserAttachments"
     effect = "Allow"
 
@@ -236,13 +232,16 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/energy-pipeline"
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.runtime_user_name}"
     ]
   }
 
 
+  # ----------------------------------------------------------
+  # Runtime IAM group
+  # ----------------------------------------------------------
 
-    statement {
+  statement {
     sid    = "ProjectIAMGroupManagement"
     effect = "Allow"
 
@@ -254,7 +253,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/EnergyPipelineUsers"
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/${var.runtime_group_name}"
     ]
   }
 
@@ -268,6 +267,29 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     ]
 
     resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/EnergyPipelineUsers"
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/${var.runtime_group_name}"
     ]
   }
+}
+
+
+# ------------------------------------------------------------
+# Managed deployment policy
+# ------------------------------------------------------------
+
+resource "aws_iam_policy" "github_terraform_deploy" {
+  name        = "EuropeanEnergyGitHubTerraformDeploy"
+  description = "Least-privilege permissions for GitHub Actions Terraform deployments."
+
+  policy = data.aws_iam_policy_document.github_terraform_deploy_permissions.json
+}
+
+
+# ------------------------------------------------------------
+# Attach deployment permissions to the GitHub Actions role
+# ------------------------------------------------------------
+
+resource "aws_iam_role_policy_attachment" "github_terraform_deploy" {
+  role       = aws_iam_role.github_terraform_deploy.name
+  policy_arn = aws_iam_policy.github_terraform_deploy.arn
+}
