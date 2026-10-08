@@ -1,16 +1,26 @@
-
 name: Terraform Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply the reviewed, non-destructive Terraform plan?"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: terraform-production
+  cancel-in-progress: false
+
 jobs:
   terraform-plan:
     name: Terraform Plan
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
 
@@ -27,7 +37,7 @@ jobs:
         with:
           terraform_version: "1.16.2"
 
-      - name: Configure AWS credentials
+      - name: Configure AWS plan credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
@@ -46,5 +56,73 @@ jobs:
       - name: Validate Terraform
         run: terraform validate
 
-      - name: Generate Terraform plan
-        run: terraform plan -input=false -lock-timeout=5m -no-color
+      - name: Generate saved Terraform plan
+        run: terraform plan -input=false -lock-timeout=5m -no-color -out=tfplan
+
+      - name: Block destructive Terraform operations
+        run: |
+          terraform show -json tfplan > tfplan.json
+          if jq -e '[.resource_changes[]? | select(any(.change.actions[]; . == "delete"))] | length > 0' tfplan.json; then
+            echo "::error::Terraform plan contains delete or replacement operations."
+            exit 1
+          fi
+          terraform show -no-color tfplan
+
+      - name: Upload plan for approved apply
+        if: inputs.apply
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan
+          retention-days: 1
+          if-no-files-found: error
+
+  terraform-apply:
+    name: Terraform Apply (manual approval)
+    if: inputs.apply && github.ref == 'refs/heads/main'
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    environment: production
+
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.2"
+
+      - name: Configure AWS apply credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubTerraformApply
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Download saved plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform
+
+      - name: Recheck plan for destructive operations
+        run: |
+          terraform show -json tfplan > tfplan.json
+          if jq -e '[.resource_changes[]? | select(any(.change.actions[]; . == "delete"))] | length > 0' tfplan.json; then
+            echo "::error::Terraform plan contains delete or replacement operations."
+            exit 1
+          fi
+
+      - name: Apply exactly the saved plan
+        run: terraform apply -input=false -lock-timeout=5m -no-color tfplan
