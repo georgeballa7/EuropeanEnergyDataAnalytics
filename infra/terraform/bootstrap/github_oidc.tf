@@ -176,8 +176,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "glue:GetDatabase",
       "glue:GetDatabases",
       "glue:GetTags",
-      "glue:UpdateDatabase",
-      "glue:DeleteDatabase"
+      "glue:UpdateDatabase"
     ]
 
     resources = [
@@ -221,8 +220,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "iam:GetPolicyVersion",
       "iam:ListPolicyVersions",
       "iam:CreatePolicyVersion",
-      "iam:SetDefaultPolicyVersion",
-      "iam:DeletePolicyVersion"
+      "iam:SetDefaultPolicyVersion"
     ]
 
     resources = [
@@ -244,7 +242,24 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     actions = [
       "iam:GetUser",
       "iam:ListGroupsForUser",
-      "iam:ListAttachedUserPolicies",
+      "iam:ListAttachedUserPolicies"
+    ]
+
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.runtime_user_name}"
+    ]
+  }
+
+
+  # ----------------------------------------------------------
+  # Restricted runtime user policy attachments
+  # ----------------------------------------------------------
+
+  statement {
+    sid    = "RestrictedRuntimeUserPolicyAttachments"
+    effect = "Allow"
+
+    actions = [
       "iam:AttachUserPolicy",
       "iam:DetachUserPolicy"
     ]
@@ -252,6 +267,43 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${var.runtime_user_name}"
     ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "iam:PolicyARN"
+
+      values = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.glue_policy_name}",
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.athena_policy_name}"
+      ]
+    }
+  }
+
+  # ----------------------------------------------------------
+  # Restricted runtime group policy attachments
+  # ----------------------------------------------------------
+
+  statement {
+    sid    = "RestrictedRuntimeGroupPolicyAttachments"
+    effect = "Allow"
+
+    actions = [
+      "iam:AttachGroupPolicy",
+      "iam:DetachGroupPolicy"
+    ]
+
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:group/${var.runtime_group_name}"
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "iam:PolicyARN"
+
+      values = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.s3_policy_name}"
+      ]
+    }
   }
 
 
@@ -265,9 +317,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
 
     actions = [
       "iam:GetGroup",
-      "iam:ListAttachedGroupPolicies",
-      "iam:AttachGroupPolicy",
-      "iam:DetachGroupPolicy"
+      "iam:ListAttachedGroupPolicies"
     ]
 
     resources = [
