@@ -88,6 +88,19 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
   }
 
 
+  statement {
+    sid    = "ReadEnergySNSTopic"
+    effect = "Allow"
+    actions = [
+      "sns:GetTopicAttributes",
+      "sns:ListTagsForResource",
+      "sns:ListSubscriptionsByTopic"
+    ]
+    resources = [
+      "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:european-energy-alerts"
+    ]
+  }
+
   # ----------------------------------------------------------
   # Terraform remote state
   # ----------------------------------------------------------
@@ -316,6 +329,20 @@ data "aws_iam_policy_document" "github_terraform_apply_permissions" {
     ]
     resources = [
       "arn:aws:cloudwatch::${data.aws_caller_identity.current.account_id}:dashboard/EuropeanEnergyPipeline"
+    ]
+  }
+
+  statement {
+    sid    = "ManageEnergySNSTopic"
+    effect = "Allow"
+    actions = [
+      "sns:CreateTopic",
+      "sns:SetTopicAttributes",
+      "sns:Subscribe",
+      "sns:GetSubscriptionAttributes"
+    ]
+    resources = [
+      "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:european-energy-alerts"
     ]
   }
 
