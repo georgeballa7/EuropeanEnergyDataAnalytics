@@ -14,37 +14,6 @@ jobs:
     environment: production
 
     steps:
-    
-      - name: Inspect GitHub OIDC claims
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import base64
-          import json
-          import os
-          import urllib.request
-
-          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
-          token = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
-
-          separator = "&" if "?" in url else "?"
-          request = urllib.request.Request(
-              url + separator + "audience=sts.amazonaws.com",
-              headers={"Authorization": f"Bearer {token}"}
-          )
-
-          with urllib.request.urlopen(request) as response:
-              oidc_token = json.load(response)["value"]
-
-          payload = oidc_token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-
-          claims = json.loads(base64.urlsafe_b64decode(payload))
-
-          for key in ("iss", "aud", "sub", "repository", "ref", "environment"):
-              print(f"{key}: {claims.get(key)}")
-          PY
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
