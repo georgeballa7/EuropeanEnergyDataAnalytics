@@ -137,6 +137,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
       "s3:ListBucket",
       "s3:GetBucketLocation",
       "s3:GetBucketPolicy",
+      "s3:GetBucketAcl",
       "s3:GetBucketPublicAccessBlock",
       "s3:PutBucketPublicAccessBlock",
       "s3:GetEncryptionConfiguration",
