@@ -79,9 +79,9 @@ resource "aws_iam_role" "github_terraform_deploy" {
 data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
 
   statement {
-    sid       = "ReadEnergyCloudWatchDashboard"
-    effect    = "Allow"
-    actions   = ["cloudwatch:GetDashboard"]
+    sid     = "ReadEnergyCloudWatchDashboard"
+    effect  = "Allow"
+    actions = ["cloudwatch:GetDashboard"]
     resources = [
       "arn:aws:cloudwatch::${data.aws_caller_identity.current.account_id}:dashboard/EuropeanEnergyPipeline"
     ]
@@ -322,8 +322,8 @@ resource "aws_iam_role" "github_terraform_apply" {
 data "aws_iam_policy_document" "github_terraform_apply_permissions" {
 
   statement {
-    sid     = "ManageEnergyCloudWatchDashboard"
-    effect  = "Allow"
+    sid    = "ManageEnergyCloudWatchDashboard"
+    effect = "Allow"
     actions = [
       "cloudwatch:PutDashboard"
     ]
