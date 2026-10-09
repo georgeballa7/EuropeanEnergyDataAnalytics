@@ -47,7 +47,7 @@ Terraform manages the AWS infrastructure under [`infra/terraform/`](infra/terraf
 
 The Terraform CI workflow validates configuration, generates an AWS-backed saved plan and blocks plans containing delete or replacement actions. A passing plan check does **not** automatically apply infrastructure changes. Apply operations require an explicit, reviewed procedure; see [Architecture](docs/architecture/architecture.md) for the separation of responsibilities.
 
-Monitoring is intentionally split: locally Docker-hosted Airflow sends task failure notifications to Slack, while CloudWatch monitors Athena failed-query metrics and uses the existing SNS topic for email alerts. Slack callbacks do not detect a complete host or scheduler outage; external availability monitoring is outside the current portfolio scope.
+Airflow sends task failure notifications to Slack. CloudWatch monitors Athena failed-query metrics and routes alarm notifications through the existing SNS email topic.
 
 ## Data Coverage
 
