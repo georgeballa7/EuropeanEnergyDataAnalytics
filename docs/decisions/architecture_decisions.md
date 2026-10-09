@@ -48,10 +48,6 @@ The pipeline identity receives only the AWS permissions required by the workflow
 
 Parquet is sufficient for the project's stable snapshot design. Apache Iceberg would provide additional transactional table-management capabilities, but they are not required for the current workload and would add unnecessary complexity.
 
-## Split Monitoring: Slack for Airflow, CloudWatch and SNS for AWS
-
-Airflow is Docker-hosted locally, and its task-failure callbacks notify Slack. AWS Athena failures are monitored independently using a CloudWatch metric alarm and SNS email notifications. This avoids duplicating Airflow failure notifications in CloudWatch and reduces IAM, logging and cost overhead. Slack callbacks do not cover complete scheduler or host outages; dedicated external availability monitoring is a possible future production enhancement, not part of the current scope.
-
 ## GitHub OIDC and Guarded Terraform Planning
 
 GitHub Actions assumes scoped AWS IAM roles through OIDC, avoiding long-lived AWS keys in CI. Terraform CI validates the configuration and creates an AWS-backed plan; an explicit guard blocks plans containing resource deletion or replacement. Terraform apply is kept separate from plan validation and requires deliberate review. Terraform remote state remains versioned, encrypted and locked in S3.
