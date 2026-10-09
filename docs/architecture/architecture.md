@@ -12,7 +12,10 @@ flowchart LR
     GC --> AT["Amazon Athena<br/>Project Workgroup"]
     AT --> BI["Power BI"]
 
-    TF["Terraform<br/>Infrastructure as Code"] -. provisions .-> S3I["AWS Infrastructure<br/>S3 · Glue DB · Athena · IAM"]
+    TF["Terraform<br/>Infrastructure as Code"] -. provisions .-> S3I["AWS Infrastructure<br/>S3 · Glue DB · Athena · IAM · CloudWatch · SNS"]
+    AF -. failure callbacks .-> SL["Slack"]
+    CW["CloudWatch<br/>Athena Failed Queries"] --> SNS["SNS<br/>Email Alerts"]
+    GA["GitHub Actions<br/>OIDC"] -. plan and safety checks .-> TF
     TF -. remote state .-> TFS["S3 Terraform Backend<br/>Versioned · Encrypted · Locked"]
 ```
 
@@ -73,8 +76,14 @@ The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Sl
 
 Terraform configuration lives under [`infra/terraform/`](../../infra/terraform/). Existing AWS resources were imported where appropriate, while the dedicated Athena workgroup was provisioned directly through Terraform. The remote backend is separate from the analytics data bucket and uses S3 versioning, SSE-S3 encryption, public-access blocking and S3-native state locking.
 
-CI performs Terraform formatting and validation checks without AWS credentials or automated `terraform apply`. Infrastructure changes therefore remain an explicit reviewed operation rather than an automatic deployment from CI.
+CI runs Terraform formatting and validation checks. The AWS-authenticated Terraform plan job uses GitHub Actions OIDC to assume a scoped IAM role with temporary credentials, refresh infrastructure state and produce a saved plan. A safety check rejects plans with deletion or replacement operations. A successful plan does not imply that `terraform apply` ran: infrastructure changes remain a separate, reviewed operation. Bootstrap Terraform manages the GitHub OIDC IAM roles and permissions; the application Terraform configuration manages the project resources.
+
+## Monitoring and Alerting
+
+Airflow runs locally in Docker and sends task failure notifications to Slack. These callbacks are useful for DAG/task failures while Airflow is running, but cannot independently detect a complete Docker host or scheduler outage. The project deliberately avoids shipping local Airflow logs or custom metrics to CloudWatch at this scale.
+
+AWS monitoring is separate: a CloudWatch metric alarm tracks Athena failed queries and uses the existing `european-energy-alerts` SNS topic for email notification. CloudWatch also hosts the project dashboard. These services monitor AWS-side signals rather than the health of the locally hosted Airflow service.
 
 ## Security
 
-The pipeline uses a dedicated least-privilege AWS identity. Destructive S3 permissions are deliberately excluded from the pipeline identity, and Athena query actions are scoped to the project workgroup. Local development uses AWS CLI profiles; access keys and administrative identities are intentionally outside Terraform management. A production deployment should prefer IAM roles and temporary credentials.
+The pipeline uses a dedicated least-privilege AWS identity. GitHub Actions uses OIDC role assumption and temporary credentials instead of storing long-lived AWS access keys in repository secrets. Destructive S3 permissions are deliberately excluded from the pipeline identity, and Athena query actions are scoped to the project workgroup. Local development uses AWS CLI profiles; access keys and administrative identities are intentionally outside Terraform management. A production deployment should prefer IAM roles and temporary credentials.
