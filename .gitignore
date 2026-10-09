@@ -70,6 +70,7 @@ notebooks/newplot*.png
 *.tfvars.json
 crash.log
 crash.*.log
+tfplan.json
 
 # Terraform saved execution plans
 *.tfplan
