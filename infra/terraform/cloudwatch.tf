@@ -71,3 +71,30 @@ resource "aws_cloudwatch_dashboard" "energy_pipeline" {
     ]
   })
 }
+
+
+resource "aws_cloudwatch_metric_alarm" "athena_failed_queries" {
+  alarm_name        = "EuropeanEnergy-Athena-FailedQueries"
+  alarm_description = "Alerts when an Athena DML query fails."
+
+  namespace   = "AWS/Athena"
+  metric_name = "TotalExecutionTime"
+
+  dimensions = {
+    WorkGroup  = aws_athena_workgroup.energy_analytics.name
+    QueryState = "FAILED"
+    QueryType  = "DML"
+  }
+
+  statistic           = "SampleCount"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+
+  treat_missing_data = "notBreaching"
+
+  alarm_actions = [
+    aws_sns_topic.energy_alerts.arn
+  ]
+}
