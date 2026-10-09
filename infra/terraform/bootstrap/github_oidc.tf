@@ -89,6 +89,13 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
 
 
   statement {
+    sid       = "ReadEnergyCloudWatchAlarms"
+    effect    = "Allow"
+    actions   = ["cloudwatch:DescribeAlarms"]
+    resources = ["*"]
+  }
+
+  statement {
     sid    = "ReadEnergySNSTopic"
     effect = "Allow"
     actions = [
@@ -330,6 +337,16 @@ data "aws_iam_policy_document" "github_terraform_apply_permissions" {
     ]
     resources = [
       "arn:aws:cloudwatch::${data.aws_caller_identity.current.account_id}:dashboard/EuropeanEnergyPipeline"
+    ]
+  }
+
+  statement {
+    sid     = "ManageEnergyAthenaAlarm"
+    effect  = "Allow"
+    actions = ["cloudwatch:PutMetricAlarm"]
+
+    resources = [
+      "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:EuropeanEnergy-Athena-FailedQueries"
     ]
   }
 
