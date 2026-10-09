@@ -96,6 +96,15 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
   }
 
   statement {
+    sid     = "ReadEnergyCloudWatchAlarmTags"
+    effect  = "Allow"
+    actions = ["cloudwatch:ListTagsForResource"]
+    resources = [
+      "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:EuropeanEnergy-Athena-FailedQueries"
+    ]
+  }
+
+  statement {
     sid    = "ReadEnergySNSTopic"
     effect = "Allow"
     actions = [
