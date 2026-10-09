@@ -94,6 +94,7 @@ data "aws_iam_policy_document" "github_terraform_deploy_permissions" {
     actions = [
       "sns:GetTopicAttributes",
       "sns:ListTagsForResource",
+      "sns:GetSubscriptionAttributes",
       "sns:ListSubscriptionsByTopic"
     ]
     resources = [
