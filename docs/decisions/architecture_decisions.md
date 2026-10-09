@@ -47,3 +47,7 @@ The pipeline identity receives only the AWS permissions required by the workflow
 ## No Iceberg at the Current Scale
 
 Parquet is sufficient for the project's stable snapshot design. Apache Iceberg would provide additional transactional table-management capabilities, but they are not required for the current workload and would add unnecessary complexity.
+
+## GitHub OIDC and Guarded Terraform Planning
+
+GitHub Actions assumes scoped AWS IAM roles through OIDC, avoiding long-lived AWS keys in CI. Terraform CI validates the configuration and creates an AWS-backed plan; an explicit guard blocks plans containing resource deletion or replacement. Terraform apply is kept separate from plan validation and requires deliberate review. Terraform remote state remains versioned, encrypted and locked in S3.
