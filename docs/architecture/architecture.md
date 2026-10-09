@@ -80,9 +80,9 @@ CI runs Terraform formatting and validation checks. The AWS-authenticated Terraf
 
 ## Monitoring and Alerting
 
-Airflow runs locally in Docker and sends task failure notifications to Slack. These callbacks are useful for DAG/task failures while Airflow is running, but cannot independently detect a complete Docker host or scheduler outage. The project deliberately avoids shipping local Airflow logs or custom metrics to CloudWatch at this scale.
+Airflow runs locally in Docker and sends task failure notifications to Slack.
 
-AWS monitoring is separate: a CloudWatch metric alarm tracks Athena failed queries and uses the existing `european-energy-alerts` SNS topic for email notification. CloudWatch also hosts the project dashboard. These services monitor AWS-side signals rather than the health of the locally hosted Airflow service.
+A CloudWatch metric alarm tracks Athena failed queries and uses the existing `european-energy-alerts` SNS topic for email notifications. CloudWatch also hosts the project dashboard.
 
 ## Security
 
