@@ -71,5 +71,8 @@ notebooks/newplot*.png
 crash.log
 crash.*.log
 
+# Terraform saved execution plans
+*.tfplan
+
 
 
