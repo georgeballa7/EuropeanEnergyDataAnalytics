@@ -1,6 +1,6 @@
 # Data Quality
 
-Data-quality checks are executed before validated data is persisted in the Silver and Gold layers.
+Data-quality checks run both before persistence in the Silver and Gold layers and after Glue catalog synchronization against the persisted Gold tables through Amazon Athena.
 
 ## Silver
 
@@ -23,6 +23,17 @@ The dimensional model is validated for:
 - referential integrity between facts and dimensions
 
 Gold is persisted only after the complete model passes validation.
+
+## Athena Post-Load Validation
+
+The final Airflow task, `validate_persisted_gold`, queries all nine Gold tables using the existing `european-energy-analytics` Athena workgroup. It verifies:
+
+- each dimension and fact table contains records
+- required key and measure fields are non-null
+- dimension keys and fact business keys are unique
+- fact foreign keys resolve to the corresponding dimensions
+
+The task fails on invalid data, Athena query errors or query timeouts. This checks the queryable data in S3 through the Glue catalog, complementing the in-memory transformation checks. See [`src/quality/athena_quality.py`](../src/quality/athena_quality.py) for the implementation. The checks validate structural integrity; they do not establish completeness of source coverage or independent correctness of all analytical measures.
 
 ## Source-Aware Validation
 
