@@ -75,17 +75,17 @@ comparison AS (
         c.country_name,
 
         MAX(CASE WHEN e.year = (SELECT start_year FROM comparison_period)
-            THEN e.emissions_mtco2 END) AS emissions_2019_mtco2,
+            THEN e.emissions_mtco2 END) AS emissions_start_mtco2,
         MAX(CASE WHEN e.year = (SELECT end_year FROM comparison_period)
-            THEN e.emissions_mtco2 END) AS emissions_2025_mtco2,
+            THEN e.emissions_mtco2 END) AS emissions_end_mtco2,
 
         MAX(CASE WHEN i.year = (SELECT start_year FROM comparison_period)
             THEN i.avg_carbon_intensity_gco2_per_kwh END)
-            AS carbon_intensity_2019,
+            AS carbon_intensity_start,
 
         MAX(CASE WHEN i.year = (SELECT end_year FROM comparison_period)
             THEN i.avg_carbon_intensity_gco2_per_kwh END)
-            AS carbon_intensity_2025
+            AS carbon_intensity_end
 
     FROM european_energy_analytics.dim_country AS c
     LEFT JOIN annual_emissions AS e
@@ -101,27 +101,27 @@ SELECT
     (SELECT start_year FROM comparison_period) AS start_year,
     (SELECT end_year FROM comparison_period) AS end_year,
     country_name,
-    ROUND(emissions_2019_mtco2, 2) AS emissions_2019_mtco2,
-    ROUND(emissions_2025_mtco2, 2) AS emissions_2025_mtco2,
+    ROUND(emissions_start_mtco2, 2) AS emissions_start_mtco2,
+    ROUND(emissions_end_mtco2, 2) AS emissions_end_mtco2,
 
     ROUND(
-        100.0 * (emissions_2025_mtco2 - emissions_2019_mtco2)
-        / NULLIF(emissions_2019_mtco2, 0),
+        100.0 * (emissions_end_mtco2 - emissions_start_mtco2)
+        / NULLIF(emissions_start_mtco2, 0),
         1
     ) AS emissions_change_pct,
 
-    ROUND(carbon_intensity_2019, 1) AS carbon_intensity_2019,
-    ROUND(carbon_intensity_2025, 1) AS carbon_intensity_2025,
+    ROUND(carbon_intensity_start, 1) AS carbon_intensity_start,
+    ROUND(carbon_intensity_end, 1) AS carbon_intensity_end,
 
     ROUND(
-        carbon_intensity_2025 - carbon_intensity_2019,
+        carbon_intensity_end - carbon_intensity_start,
         1
     ) AS carbon_intensity_change_gco2_per_kwh
 
 FROM comparison
 WHERE
-    emissions_2019_mtco2 IS NOT NULL
-    AND emissions_2025_mtco2 IS NOT NULL
-    AND carbon_intensity_2019 IS NOT NULL
-    AND carbon_intensity_2025 IS NOT NULL
+    emissions_start_mtco2 IS NOT NULL
+    AND emissions_end_mtco2 IS NOT NULL
+    AND carbon_intensity_start IS NOT NULL
+    AND carbon_intensity_end IS NOT NULL
 ORDER BY emissions_change_pct;
