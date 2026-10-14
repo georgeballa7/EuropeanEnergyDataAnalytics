@@ -18,10 +18,12 @@ WITH annual_generation AS (
     JOIN european_energy_analytics.dim_energy_series AS s
         ON g.series_key = s.series_key
     WHERE s.is_aggregate_series = false
+      AND s.series_name <> 'Net imports'
       AND d.year < YEAR(CURRENT_DATE)
     GROUP BY
         g.entity_code,
         d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 annual_demand AS (
@@ -36,6 +38,7 @@ annual_demand AS (
     GROUP BY
         d.entity_code,
         dt.year
+    HAVING COUNT(DISTINCT dt.month_number) = 12
 )
 
 SELECT
