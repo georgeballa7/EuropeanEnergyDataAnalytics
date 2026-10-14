@@ -15,6 +15,9 @@ flowchart LR
     AT --> DQ["Post-load Gold Validation<br/>9 Tables"]
     DQ -. validation failure .-> AF
     AT --> BI["Power BI"]
+    DQ --> AM["Analytics Gold<br/>4 Parquet Reporting Marts"]
+    AM --> AGL["Glue Analytics Tables"]
+    AGL --> AT
 
     TF["Terraform"] -. provisions .-> AWS["S3 · Glue DB<br/>Athena · IAM · CloudWatch · SNS"]
     AF -. failure alerts .-> SL["Slack"]
@@ -41,7 +44,8 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - Versioned and encrypted S3 remote Terraform state with native locking
 - CI checks for pytest and Terraform formatting/validation; AWS-authenticated Terraform planning via GitHub OIDC with a guard against delete/replacement operations
 - Serverless SQL analytics through the dedicated `european-energy-analytics` Athena workgroup
-- Power BI reporting over the Gold model through Athena
+- Power BI reporting over the existing nine-table Core Gold model through Athena
+- Four additive Analytics Gold reporting marts, published as validated Parquet snapshots with unchanged-result detection
 
 ## Infrastructure, CI/CD and Monitoring
 
@@ -94,7 +98,7 @@ terraform init -backend=false
 terraform validate
 ```
 
-Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify all five Airflow tasks, including `validate_persisted_gold`, along with Bronze objects, Silver/Gold snapshots, Glue tables and Athena validation results.
+Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify all six Airflow tasks, including `validate_persisted_gold` and `publish_analytics_gold`, along with Bronze objects, Silver/Gold snapshots, Glue tables and Athena validation results.
 
 For complete setup requirements, troubleshooting, safe recovery procedures and the reproducibility checklist, see the **[Local Setup and Operations Runbook](docs/operations/runbook.md)**.
 
@@ -113,6 +117,45 @@ The regular pipeline remains incremental. Historical scope expansions are handle
 ## Analytics
 
 The project analyses electricity generation and demand, energy-mix transition, power-sector emissions and carbon intensity, and installed solar and wind capacity. The final Athena SQL queries are available in [`sql/analytics/`](sql/analytics/).
+
+### Analytics Gold reporting marts
+
+After the persisted Core Gold quality gate succeeds, the sixth Airflow task
+(`publish_analytics_gold`) materializes four **additional** Parquet reporting marts.
+The original nine Core Gold tables and existing Power BI model remain unchanged.
+
+| Glue table | Verified rows (2026-10-14) | Purpose |
+| --- | ---: | --- |
+| `analytics_generation_demand_summary` | 38 | Generation and demand change |
+| `analytics_energy_mix_transition_summary` | 38 | Renewable, fossil and clean generation shares |
+| `analytics_emissions_carbon_intensity` | 38 | Emissions and carbon intensity |
+| `analytics_installed_solar_wind_capacity` | 10 | Installed solar and wind capacity |
+
+These row counts are **not** the total configured market scope. The core
+project covers 41 markets; reporting SQL applies period-availability criteria,
+and the capacity source has narrower country coverage. The published tables
+were verified by querying `COUNT(*)` in Athena on 2026-10-14.
+
+The publisher reads each reporting result, computes a SHA-256 fingerprint from
+the SQL, column metadata and order-independent result rows, and compares it
+with the fingerprint stored on the corresponding Glue table. If unchanged, it
+skips Parquet UNLOAD and leaves the S3 snapshot location untouched. Otherwise
+it writes a new immutable Parquet snapshot under
+`gold/analytics/<mart>/snapshots/<uuid>/`, registers a temporary Glue table,
+validates nonempty data, required dimensions and unique country-period rows,
+then updates the final Glue table and removes the temporary table.
+
+**Operational limitations:** unchanged-result idempotency has been confirmed
+by two successive publisher runs and an end-to-end six-task Airflow run.
+The four Glue updates are **not an atomic transaction**: partial success
+requires rerunning the publisher, which skips unchanged completed marts.
+Failed attempts may leave unreferenced S3 snapshots, so cleanup must be
+deliberate and must never delete a snapshot referenced by Glue. Concurrent
+publishers are not protected by a distributed lock; avoid overlapping runs.
+The fingerprint check also assumes the already-published snapshot has not
+been externally modified. This workflow is not a guarantee of exactly-once
+execution or atomic multi-table publication.
+
 
 ## Documentation
 
