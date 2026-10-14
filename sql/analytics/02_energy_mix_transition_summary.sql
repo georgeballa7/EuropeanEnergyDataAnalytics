@@ -3,7 +3,7 @@
 -- Wie hat sich der Stromerzeugungsmix im Zeitverlauf verändert?
 --
 -- Methodik:
--- - 20 analysierte Länder
+-- - alle Länder mit vollständiger Datenabdeckung im gemeinsamen Vergleichszeitraum
 -- - nur nicht-aggregierte Erzeugungsreihen
 -- - Net Imports ausgeschlossen
 -- - nur vollständige Kalenderjahre
