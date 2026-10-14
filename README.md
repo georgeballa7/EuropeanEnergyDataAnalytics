@@ -108,54 +108,26 @@ The project scope contains 41 European markets available from Ember. Electricity
 
 The regular pipeline remains incremental. Historical scope expansions are handled through an explicit backfill workflow that writes source responses to Bronze without changing the persistent incremental ingestion state. Silver and Gold snapshots are then rebuilt and validated from the expanded source history.
 
-## Power BI Dashboard
+## Analytics & Reporting
+
+The Power BI report explores four questions about the evolution of European electricity systems. It combines the existing dimensional **Core Gold** model (nine tables) with four purpose-built **Analytics Gold** reporting marts, published as Parquet datasets in Amazon S3 and made queryable through AWS Glue and Amazon Athena.
+
+| Analytical area | Key question | Analytics Gold table |
+| --- | --- | --- |
+| **Generation & Demand** | How have electricity production, consumption and cross-border electricity balances evolved? | `analytics_generation_demand_summary` |
+| **Energy Mix & Transition** | How have renewable, fossil and clean electricity-generation shares changed? | `analytics_energy_mix_transition_summary` |
+| **Emissions & Carbon Intensity** | How have power-sector CO₂ emissions and the carbon intensity of electricity generation developed? | `analytics_emissions_carbon_intensity` |
+| **Installed Capacity** | How have installed solar and wind capacities evolved across European markets? | `analytics_installed_solar_wind_capacity` |
+
+The reporting marts provide **country-level comparisons for 2019–2025**, including baseline and latest-year values and changes over time. Coverage reflects source-data availability: the generation/demand, energy-mix and emissions comparisons currently include **38 countries each**, while the solar/wind capacity comparison includes **10 countries**. The underlying Core Gold dataset covers **41 European markets**.
+
+The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
+
+### Power BI report
+
+The interactive report contains an introduction, executive overview, dedicated pages for each of the four analytical areas, and a conclusions page. The [PDF export](powerbi/EuropeanEnergyAnalytics.pdf) provides a shareable snapshot; the `.pbix` file in [`powerbi/`](powerbi/) contains the editable report.
 
 ![Executive Overview](powerbi/screenshots/Page02.png)
-
-[View the complete Power BI report (PDF)](powerbi/EuropeanEnergyAnalytics.pdf)
-
-## Analytics
-
-The project analyses electricity generation and demand, energy-mix transition, power-sector emissions and carbon intensity, and installed solar and wind capacity. The final Athena SQL queries are available in [`sql/analytics/`](sql/analytics/).
-
-### Analytics Gold reporting marts
-
-After the persisted Core Gold quality gate succeeds, the sixth Airflow task
-(`publish_analytics_gold`) materializes four **additional** Parquet reporting marts.
-The original nine Core Gold tables and existing Power BI model remain unchanged.
-
-| Glue table | Verified rows (2026-10-14) | Purpose |
-| --- | ---: | --- |
-| `analytics_generation_demand_summary` | 38 | Generation and demand change |
-| `analytics_energy_mix_transition_summary` | 38 | Renewable, fossil and clean generation shares |
-| `analytics_emissions_carbon_intensity` | 38 | Emissions and carbon intensity |
-| `analytics_installed_solar_wind_capacity` | 10 | Installed solar and wind capacity |
-
-These row counts are **not** the total configured market scope. The core
-project covers 41 markets; reporting SQL applies period-availability criteria,
-and the capacity source has narrower country coverage. The published tables
-were verified by querying `COUNT(*)` in Athena on 2026-10-14.
-
-The publisher reads each reporting result, computes a SHA-256 fingerprint from
-the SQL, column metadata and order-independent result rows, and compares it
-with the fingerprint stored on the corresponding Glue table. If unchanged, it
-skips Parquet UNLOAD and leaves the S3 snapshot location untouched. Otherwise
-it writes a new immutable Parquet snapshot under
-`gold/analytics/<mart>/snapshots/<uuid>/`, registers a temporary Glue table,
-validates nonempty data, required dimensions and unique country-period rows,
-then updates the final Glue table and removes the temporary table.
-
-**Operational limitations:** unchanged-result idempotency has been confirmed
-by two successive publisher runs and an end-to-end six-task Airflow run.
-The four Glue updates are **not an atomic transaction**: partial success
-requires rerunning the publisher, which skips unchanged completed marts.
-Failed attempts may leave unreferenced S3 snapshots, so cleanup must be
-deliberate and must never delete a snapshot referenced by Glue. Concurrent
-publishers are not protected by a distributed lock; avoid overlapping runs.
-The fingerprint check also assumes the already-published snapshot has not
-been externally modified. This workflow is not a guarantee of exactly-once
-execution or atomic multi-table publication.
-
 
 ## Documentation
 
