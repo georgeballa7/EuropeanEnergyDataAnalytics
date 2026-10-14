@@ -99,3 +99,28 @@ def test_fingerprint_is_independent_of_row_order(monkeypatch):
     athena.get_query_results.return_value = response(["Austria", "Germany"])
     second = publisher.source_fingerprint(athena, "SELECT country_name")
     assert first == second
+
+
+def test_glue_type_conversion():
+    assert publisher.glue_compatible_type("varchar") == "string"
+    assert publisher.glue_compatible_type("varchar(100)") == "string"
+    assert publisher.glue_compatible_type("integer") == "int"
+    assert publisher.glue_compatible_type("decimal(12,2)") == "decimal(12,2)"
+    assert publisher.glue_compatible_type("double") == "double"
+
+
+def test_get_columns_uses_glue_compatible_types(monkeypatch):
+    athena = MagicMock()
+    monkeypatch.setattr(publisher, "execute", lambda client, sql: "query")
+    athena.get_query_results.return_value = {
+        "ResultSet": {"ResultSetMetadata": {"ColumnInfo": [
+            {"Name": "country_name", "Type": "varchar"},
+            {"Name": "start_year", "Type": "integer"},
+            {"Name": "generation_twh", "Type": "double"},
+        ]}}
+    }
+    assert publisher.get_columns(athena, "SELECT 1") == [
+        {"Name": "country_name", "Type": "string"},
+        {"Name": "start_year", "Type": "int"},
+        {"Name": "generation_twh", "Type": "double"},
+    ]
