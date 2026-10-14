@@ -7,7 +7,7 @@
 -- 2016 vs. 2025
 --
 -- Notes:
--- - Capacity data is available for 12 countries.
+-- - Country coverage is determined by complete observations in both comparison years.
 -- - Solar uses the non-aggregate "Solar" series.
 -- - Total wind capacity uses the aggregate "Wind" series.
 -- - Onshore, offshore and unknown wind are not added separately
@@ -32,6 +32,7 @@ WITH annual_capacity AS (
         f.entity_code,
         d.year,
         s.series_name
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 comparison AS (
