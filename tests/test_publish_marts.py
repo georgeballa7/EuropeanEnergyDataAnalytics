@@ -46,7 +46,12 @@ def test_empty_snapshot_does_not_change_glue(monkeypatch):
     ]}}
     with pytest.raises(ValueError, match="Empty analytics snapshot"):
         publisher.publish_mart("generation_demand_summary", athena=athena, glue=glue)
-    glue.create_table.assert_not_called()
+    assert glue.create_table.call_count == 1
+    staging = glue.create_table.call_args.kwargs["TableInput"]["Name"]
+    assert staging.startswith("_staging_analytics_")
+    glue.delete_table.assert_called_once_with(
+        DatabaseName=publisher.DATABASE_NAME, Name=staging
+    )
     glue.update_table.assert_not_called()
 
 
