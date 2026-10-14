@@ -45,15 +45,15 @@ complete_country_years AS (
 
 annual_total AS (
     SELECT
-        entity_code,
-        year,
-        SUM(generation_twh) AS total_generation_twh
+        m.entity_code,
+        m.year,
+        SUM(m.generation_twh) AS total_generation_twh
     FROM annual_mix AS m
     JOIN complete_country_years AS cy
       ON m.entity_code = cy.entity_code AND m.year = cy.year
     GROUP BY
-        entity_code,
-        year
+        m.entity_code,
+        m.year
 )
 
 SELECT
