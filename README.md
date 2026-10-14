@@ -12,6 +12,8 @@ flowchart LR
     S --> G["S3 Gold<br/>Dimensional Model"]
     G --> GC["AWS Glue<br/>Data Catalog"]
     GC --> AT["Amazon Athena<br/>Project Workgroup"]
+    AT --> DQ["Post-load Gold Validation<br/>9 Tables"]
+    DQ -. validation failure .-> AF
     AT --> BI["Power BI"]
 
     TF["Terraform"] -. provisions .-> AWS["S3 · Glue DB<br/>Athena · IAM · CloudWatch · SNS"]
@@ -29,7 +31,7 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - Incremental monthly API ingestion with persistent S3 state
 - Targeted historical backfills for controlled scope expansion without modifying incremental state
 - Bronze / Silver / Gold medallion architecture
-- Automated Silver and Gold data-quality checks
+- Automated Silver and Gold data-quality checks before persistence, followed by Athena post-load validation of all nine Gold tables
 - Dimensional Gold model with conformed dimensions
 - Coverage of 41 Ember-supported European markets across the core monthly datasets
 - Dataset-specific source coverage for installed capacity
@@ -92,7 +94,7 @@ terraform init -backend=false
 terraform validate
 ```
 
-Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify Airflow task status, new Bronze objects, Silver/Gold snapshots, Glue tables and representative Athena results.
+Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify all five Airflow tasks, including `validate_persisted_gold`, along with Bronze objects, Silver/Gold snapshots, Glue tables and Athena validation results.
 
 For complete setup requirements, troubleshooting, safe recovery procedures and the reproducibility checklist, see the **[Local Setup and Operations Runbook](docs/operations/runbook.md)**.
 
