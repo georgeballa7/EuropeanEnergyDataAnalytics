@@ -1,7 +1,8 @@
 -- ============================================================
 -- Leitfrage 1 – Summary:
 -- Entwicklung von Stromerzeugung und Stromnachfrage
--- vom ersten verfügbaren Jahr bis zum letzten vollständigen Jahr
+-- Vergleich 2019 mit dem jüngsten vollständigen Datenjahr
+-- Nur Länder mit vollständiger Erzeugung und Nachfrage in beiden Jahren
 -- ============================================================
 
 WITH annual_generation AS (
@@ -76,13 +77,24 @@ annual_data AS (
        AND g.year = d.year
 ),
 
-country_period AS (
+comparison_period AS (
     SELECT
-        entity_code,
-        MIN(year) AS first_year,
+        2019 AS first_year,
         MAX(year) AS latest_year
     FROM annual_data
-    GROUP BY entity_code
+    WHERE year < YEAR(CURRENT_DATE)
+),
+
+country_period AS (
+    SELECT
+        a.entity_code,
+        p.first_year,
+        p.latest_year
+    FROM annual_data AS a
+    CROSS JOIN comparison_period AS p
+    WHERE a.year IN (p.first_year, p.latest_year)
+    GROUP BY a.entity_code, p.first_year, p.latest_year
+    HAVING COUNT(DISTINCT a.year) = 2
 )
 
 SELECT
