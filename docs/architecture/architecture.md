@@ -11,6 +11,9 @@ flowchart LR
     G --> GC["AWS Glue<br/>Data Catalog"]
     GC --> AT["Amazon Athena<br/>Project Workgroup"]
     AT --> BI["Power BI"]
+    AT --> AG["Analytics Gold<br/>4 Reporting Marts"]
+    AG --> AGC["Glue Analytics Tables"]
+    AGC --> AT
 
     TF["Terraform<br/>Infrastructure as Code"] -. provisions .-> S3I["AWS Infrastructure<br/>S3 · Glue DB · Athena · IAM · CloudWatch · SNS"]
     AF -. failure callbacks .-> SL["Slack"]
@@ -47,11 +50,13 @@ Validated Silver datasets are transformed into a Fact Constellation / Galaxy mod
 
 ## Catalog and Analytics
 
-The controlled Silver and Gold schemas are registered explicitly by the pipeline in the AWS Glue Data Catalog. The Glue database itself is infrastructure-managed by Terraform, while the 14 data-dependent catalog tables are pipeline-owned. This avoids configuration drift between Terraform and schema synchronisation.
+The controlled Silver and Gold schemas are registered explicitly by the pipeline in the AWS Glue Data Catalog. The Glue database itself is infrastructure-managed by Terraform, while the Silver/Core Gold and four Analytics Gold catalog tables are pipeline-owned. This avoids configuration drift between Terraform and schema synchronisation.
 
 Amazon Athena queries Parquet directly in S3 through the dedicated `european-energy-analytics` workgroup, providing a serverless SQL layer without a permanently running analytical database. Query results are written to the project's `athena-results/` S3 prefix with SSE-S3 encryption. The runtime Athena policy restricts query operations to this workgroup while retaining the catalog metadata permissions required by the pipeline.
 
-The final analytical SQL queries are version-controlled under [`sql/analytics/`](../../sql/analytics/). Power BI consumes the Gold model through Athena in Import mode.
+The final analytical SQL queries are version-controlled under [`sql/analytics/`](../../sql/analytics/). Power BI continues to consume the unchanged nine-table Core Gold model through Athena in Import mode.
+
+The Analytics Gold publisher uses Athena UNLOAD to write four additional Parquet snapshots under `gold/analytics/`. Temporary Glue tables expose snapshots to Athena for validation, after which the publisher creates or updates separate `analytics_*` Glue tables. A SHA-256 fingerprint of SQL, column metadata and sorted query results skips publication when the reporting data has not changed. Each mart is independently published; there is no atomic four-table transaction, distributed writer lock or automatic cleanup of orphaned S3 snapshots.
 
 ## Orchestration
 
@@ -63,7 +68,8 @@ flowchart LR
     S --> G["Gold Transformation<br/>+ Gold DQ"]
     G --> C["Glue Catalog Sync<br/>Silver + Gold tables"]
     C --> A["Athena<br/>Post-load Gold DQ"]
-    A --> Q["Gold Tables<br/>Query Validation"]
+    A --> Q["Core Gold Tables<br/>Query Validation"]
+    Q --> M["Analytics Gold Publication<br/>4 validated Parquet marts"]
 
     TF["Terraform"] -. provisions .-> AWS["S3 · Glue Database<br/>Athena Workgroup · IAM"]
     AWS -. supports .-> B
@@ -71,7 +77,7 @@ flowchart LR
     AWS -. supports .-> A
 ```
 
-The DAG contains five sequential tasks: Bronze ingestion, Silver transformation and validation, Gold transformation and validation, Glue catalog synchronization, and Athena post-load validation. The final task checks all nine queryable Gold tables for nonempty data, required fields, unique keys and valid fact foreign keys. Failures stop the DAG and trigger its configured failure callback.
+The DAG contains six sequential tasks: Bronze ingestion, Silver transformation and validation, Core Gold transformation and validation, Glue catalog synchronization, Athena post-load validation of the nine Core Gold tables, and Analytics Gold publication. The Athena quality gate checks nonempty data, required fields, unique keys and valid fact foreign keys before the reporting marts are published. Failures stop the DAG and trigger its configured failure callback.
 
 The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
 
