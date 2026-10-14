@@ -4,7 +4,7 @@
 -- change across European countries between 2019 and 2025?
 --
 -- Analysis period:
--- 2019 vs. latest fully observed year (currently 2025)
+-- 2019 vs. 2025 (shared comparison years; both require 12 months)
 --
 -- Notes:
 -- - Total emissions use the aggregate series "Total generation"
@@ -13,18 +13,7 @@
 -- - Carbon intensity is calculated as the unweighted average of monthly gCO2/kWh values.
 -- - Both comparison years must contain 12 months of observations.
 
-WITH comparison_period AS (
-    SELECT 2019 AS start_year, MAX(d.year) AS end_year
-    FROM european_energy_analytics.fact_emissions AS f
-    JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
-    WHERE d.year < YEAR(CURRENT_DATE)
-    GROUP BY d.year
-    HAVING COUNT(DISTINCT d.month_number) = 12
-    ORDER BY end_year DESC
-    LIMIT 1
-),
-
-annual_emissions AS (
+WITH annual_emissions AS (
     SELECT
         f.entity_code,
         d.year,
