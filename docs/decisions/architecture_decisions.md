@@ -18,7 +18,7 @@ The regular ingestion path remains state-driven and incremental. Historical scop
 
 ## Configuration-Driven Geographic Scope
 
-The project uses a shared 41-market European scope for generation, demand, emissions and carbon intensity. Datasets with narrower source availability can override that scope in configuration; installed capacity currently uses this mechanism. This keeps source limitations explicit without reducing coverage for unrelated datasets.
+The project uses a shared 41-market European scope for generation, demand, emissions and carbon intensity. Datasets with narrower source availability can override that scope in configuration; installed capacity currently uses this mechanism with 13 configured markets; the other four monthly datasets use 41. The configured source start is January 2010, subject to actual Ember data availability. This keeps source limitations explicit without reducing coverage for unrelated datasets.
 
 ## pandas Instead of Spark
 
@@ -51,3 +51,7 @@ Parquet is sufficient for the project's stable snapshot design. Apache Iceberg w
 ## GitHub OIDC and Guarded Terraform Planning
 
 GitHub Actions assumes scoped AWS IAM roles through OIDC, avoiding long-lived AWS keys in CI. Terraform CI validates the configuration and creates an AWS-backed plan; an explicit guard blocks plans containing resource deletion or replacement. Terraform apply is kept separate from plan validation and requires deliberate review. Terraform remote state remains versioned, encrypted and locked in S3.
+
+## Additive Analytics Gold reporting marts
+
+The nine-table Core Gold dimensional model remains the reusable analytical foundation. Four separate country-level Analytics Gold marts are published from version-controlled Athena SQL as validated Parquet snapshots, catalogued in Glue and consumed by Power BI. The reporting comparisons use 2019–2025 and were verified with 38/38/38/10 rows on 2026-10-14. This avoids changing the Core Gold fact grains solely to satisfy dashboard-specific aggregations. Each mart is published separately; this does not provide a multi-mart atomic transaction.
