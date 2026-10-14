@@ -104,7 +104,7 @@ For complete setup requirements, troubleshooting, safe recovery procedures and t
 
 ## Data Coverage
 
-The project scope contains 41 European markets available from Ember. Electricity generation, demand, power-sector emissions and carbon intensity use the full configured European scope. Installed capacity uses a smaller dataset-specific country scope because Ember provides monthly capacity data for fewer markets.
+The project configures **41 European markets** for electricity generation, demand, power-sector emissions and carbon intensity. Installed capacity has its own **13-market** Ember-supported ingestion scope. These are configured request scopes, not guarantees that each market has observations in every period. The source request starts at **2010-01**; actual availability varies by dataset and country.
 
 The regular pipeline remains incremental. Historical scope expansions are handled through an explicit backfill workflow that writes source responses to Bronze without changing the persistent incremental ingestion state. Silver and Gold snapshots are then rebuilt and validated from the expanded source history.
 
@@ -136,5 +136,7 @@ The interactive report contains an introduction, executive overview, dedicated p
 - [Data Dictionary](docs/data_dictionary/data_dictionary.md)
 - [Data Quality](docs/data_quality.md)
 - [Architecture Decisions](docs/decisions/architecture_decisions.md)
+- [Silver Data Quality Guidelines](docs/decisions/silver_data_quality_guidelines.md)
+- [Operations Runbook](docs/operations/runbook.md)
 
-Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/).
+Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The notebooks are exploratory snapshots and do not replace the full incremental Bronze/Silver/Gold pipeline.
