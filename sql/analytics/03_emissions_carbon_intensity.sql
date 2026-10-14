@@ -1,7 +1,7 @@
 -- Q3: CO2 Emissions and Carbon Intensity
 -- Question:
 -- How did power-sector CO2 emissions and carbon intensity
--- change across European countries between 2019 and 2025?
+-- change across European countries between 2019 and the latest common complete year?
 --
 -- Analysis period:
 -- 2019 vs. latest complete year available for both metrics
@@ -14,24 +14,43 @@
 -- - Both comparison years must contain 12 months of observations.
 
 WITH comparison_period AS (
-    SELECT 2019 AS start_year, MAX(e.year) AS end_year
+    -- One shared rule across all four analytical comparisons.
+    -- Require a complete calendar year in every source dataset.
+    SELECT 2019 AS start_year, MAX(year) AS end_year
     FROM (
-        SELECT f.entity_code, d.year
-        FROM european_energy_analytics.fact_emissions AS f
-        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
-        JOIN european_energy_analytics.dim_energy_series AS s ON f.series_key = s.series_key
-        WHERE s.series_name = 'Total generation' AND d.year < YEAR(CURRENT_DATE)
-        GROUP BY f.entity_code, d.year
-        HAVING COUNT(DISTINCT d.month_number) = 12
-    ) AS e
-    JOIN (
-        SELECT f.entity_code, d.year
-        FROM european_energy_analytics.fact_carbon_intensity AS f
-        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
-        WHERE d.year < YEAR(CURRENT_DATE)
-        GROUP BY f.entity_code, d.year
-        HAVING COUNT(DISTINCT d.month_number) = 12
-    ) AS i ON e.entity_code = i.entity_code AND e.year = i.year
+        SELECT d.year, 'generation' AS source_name, COUNT(DISTINCT d.month_number) AS months
+        FROM european_energy_analytics.fact_generation f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'demand', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_demand f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'emissions', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_emissions f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'carbon_intensity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_carbon_intensity f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'solar_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Solar'
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'wind_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Wind'
+        GROUP BY d.year
+    ) AS coverage
+    WHERE year >= 2019 AND year < YEAR(CURRENT_DATE) AND months = 12
+    GROUP BY year
+    HAVING COUNT(DISTINCT source_name) = 6
 ),
 annual_emissions AS (
     SELECT
