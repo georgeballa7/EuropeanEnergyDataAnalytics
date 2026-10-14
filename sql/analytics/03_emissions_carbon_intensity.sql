@@ -98,6 +98,8 @@ comparison AS (
 )
 
 SELECT
+    (SELECT start_year FROM comparison_period) AS start_year,
+    (SELECT end_year FROM comparison_period) AS end_year,
     country_name,
     ROUND(emissions_2019_mtco2, 2) AS emissions_2019_mtco2,
     ROUND(emissions_2025_mtco2, 2) AS emissions_2025_mtco2,
