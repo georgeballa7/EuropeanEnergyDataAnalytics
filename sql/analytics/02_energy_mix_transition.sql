@@ -34,15 +34,26 @@ WITH annual_mix AS (
         s.energy_category
 ),
 
+complete_country_years AS (
+    SELECT g.entity_code, d.year
+    FROM european_energy_analytics.fact_generation AS g
+    JOIN european_energy_analytics.dim_date AS d ON g.date = d.date
+    WHERE d.year < YEAR(CURRENT_DATE)
+    GROUP BY g.entity_code, d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
+),
+
 annual_total AS (
     SELECT
-        entity_code,
-        year,
-        SUM(generation_twh) AS total_generation_twh
-    FROM annual_mix
+        m.entity_code,
+        m.year,
+        SUM(m.generation_twh) AS total_generation_twh
+    FROM annual_mix AS m
+    JOIN complete_country_years AS cy
+      ON m.entity_code = cy.entity_code AND m.year = cy.year
     GROUP BY
-        entity_code,
-        year
+        m.entity_code,
+        m.year
 )
 
 SELECT

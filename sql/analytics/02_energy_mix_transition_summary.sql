@@ -3,13 +3,15 @@
 -- Wie hat sich der Stromerzeugungsmix im Zeitverlauf verändert?
 --
 -- Methodik:
--- - 20 analysierte Länder
+-- - Länder mit vollständigen Daten in beiden Vergleichsjahren
 -- - nur nicht-aggregierte Erzeugungsreihen
 -- - Net Imports ausgeschlossen
 -- - nur vollständige Kalenderjahre
--- - gemeinsamer Vergleichszeitraum aller Länder
+-- - Basisjahr 2019; Endjahr ist das jüngste vollständige Datenjahr
+-- - Länder ohne vollständige Daten in beiden Jahren ausgeschlossen
 -- - laufendes Kalenderjahr ausgeschlossen
 -- - Veränderung der Mix-Anteile in Prozentpunkten
+-- - fehlende Energiekategorien in vollständigen Jahren als 0 %
 -- ============================================================
 
 WITH monthly_mix AS (
@@ -116,100 +118,112 @@ annual_shares AS (
        AND m.year = t.year
 ),
 
-country_coverage AS (
-    SELECT
-        entity_code,
-        MIN(year) AS first_complete_year,
-        MAX(year) AS last_complete_year
-
-    FROM annual_total
-
-    GROUP BY entity_code
+comparison_period AS (
+    -- One shared rule across all four analytical comparisons.
+    -- Require a complete calendar year in every source dataset.
+    SELECT 2019 AS start_year, MAX(year) AS end_year
+    FROM (
+        SELECT d.year, 'generation' AS source_name, COUNT(DISTINCT d.month_number) AS months
+        FROM european_energy_analytics.fact_generation f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'demand', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_demand f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'emissions', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_emissions f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'carbon_intensity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_carbon_intensity f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'solar_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Solar'
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'wind_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Wind'
+        GROUP BY d.year
+    ) AS coverage
+    WHERE year >= 2019 AND year < YEAR(CURRENT_DATE) AND months = 12
+    GROUP BY year
+    HAVING COUNT(DISTINCT source_name) = 6
+    ORDER BY end_year DESC
+    LIMIT 1
 ),
 
-common_period AS (
-    SELECT
-        MAX(first_complete_year) AS common_start_year,
-        MIN(last_complete_year) AS common_end_year
-
-    FROM country_coverage
+eligible_countries AS (
+    SELECT a.entity_code
+    FROM annual_total AS a
+    CROSS JOIN comparison_period AS p
+    WHERE a.year IN (p.start_year, p.end_year)
+    GROUP BY a.entity_code
+    HAVING COUNT(DISTINCT a.year) = 2
 ),
 
 comparison AS (
     SELECT
         s.entity_code,
-        p.common_start_year,
-        p.common_end_year,
+        p.start_year AS start_year,
+        p.end_year AS end_year,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_start_year
-                     AND s.energy_category = 'Renewable'
-                THEN s.generation_share_pct
-            END
-        ) AS renewable_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Renewable'
+            THEN s.generation_share_pct
+        END), 0.0) AS renewable_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_end_year
-                     AND s.energy_category = 'Renewable'
-                THEN s.generation_share_pct
-            END
-        ) AS renewable_end_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Renewable'
+            THEN s.generation_share_pct
+        END), 0.0) AS renewable_end_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_start_year
-                     AND s.energy_category = 'Fossil'
-                THEN s.generation_share_pct
-            END
-        ) AS fossil_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Fossil'
+            THEN s.generation_share_pct
+        END), 0.0) AS fossil_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_end_year
-                     AND s.energy_category = 'Fossil'
-                THEN s.generation_share_pct
-            END
-        ) AS fossil_end_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Fossil'
+            THEN s.generation_share_pct
+        END), 0.0) AS fossil_end_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_start_year
-                     AND s.energy_category = 'Clean'
-                THEN s.generation_share_pct
-            END
-        ) AS clean_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Clean'
+            THEN s.generation_share_pct
+        END), 0.0) AS clean_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.common_end_year
-                     AND s.energy_category = 'Clean'
-                THEN s.generation_share_pct
-            END
-        ) AS clean_end_pct
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Clean'
+            THEN s.generation_share_pct
+        END), 0.0) AS clean_end_pct
 
     FROM annual_shares AS s
-
-    CROSS JOIN common_period AS p
-
-    WHERE s.year IN (
-        p.common_start_year,
-        p.common_end_year
-    )
-
-    GROUP BY
-        s.entity_code,
-        p.common_start_year,
-        p.common_end_year
+    CROSS JOIN comparison_period AS p
+    JOIN eligible_countries AS ec
+        ON s.entity_code = ec.entity_code
+    WHERE s.year IN (p.start_year, p.end_year)
+    GROUP BY s.entity_code, p.start_year, p.end_year
 )
-
 SELECT
     c.country_name,
     x.entity_code,
 
-    x.common_start_year,
-    x.common_end_year,
+    x.start_year,
+    x.end_year,
 
     ROUND(x.renewable_start_pct, 1)
         AS renewable_start_pct,
