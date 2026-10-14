@@ -106,6 +106,16 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
         invalid = int(check_rows[1]["Data"][0]["VarCharValue"])
         if invalid:
             raise ValueError(f"Invalid reporting dimensions in {mart_name}: {invalid}")
+        duplicate_id = execute(
+            athena,
+            f'SELECT COUNT(*) AS duplicate_groups FROM (SELECT country_name, start_year, end_year '
+            f'FROM "{DATABASE_NAME}"."{staging_table}" '
+            'GROUP BY country_name, start_year, end_year HAVING COUNT(*) > 1)',
+        )
+        duplicate_rows = athena.get_query_results(QueryExecutionId=duplicate_id)["ResultSet"]["Rows"]
+        duplicates = int(duplicate_rows[1]["Data"][0]["VarCharValue"])
+        if duplicates:
+            raise ValueError(f"Duplicate reporting country-period rows in {mart_name}: {duplicates}")
     finally:
         execute(athena, f'DROP TABLE IF EXISTS "{DATABASE_NAME}"."{staging_table}"')
 
