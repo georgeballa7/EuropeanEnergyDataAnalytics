@@ -4,7 +4,7 @@
 -- across European countries?
 --
 -- Analysis period:
--- 2019 vs. 2025 (shared comparison years)
+-- 2019 vs. latest complete year available for solar and wind
 --
 -- Notes:
 -- - Country coverage is determined by complete observations in both comparison years.
@@ -12,9 +12,30 @@
 -- - Total wind capacity uses the aggregate "Wind" series.
 -- - Onshore, offshore and unknown wind are not added separately
 --   in order to avoid double counting.
--- - 2026 is excluded because it is a partial year.
+-- - Current calendar year is excluded; future complete years are selected automatically.
 
-WITH annual_capacity AS (
+WITH comparison_period AS (
+    SELECT 2019 AS start_year, MAX(solar.year) AS end_year
+    FROM (
+        SELECT f.entity_code, d.year
+        FROM european_energy_analytics.fact_capacity AS f
+        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series AS s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Solar' AND d.year < YEAR(CURRENT_DATE)
+        GROUP BY f.entity_code, d.year
+        HAVING COUNT(DISTINCT d.month_number) = 12
+    ) AS solar
+    JOIN (
+        SELECT f.entity_code, d.year
+        FROM european_energy_analytics.fact_capacity AS f
+        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series AS s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Wind' AND d.year < YEAR(CURRENT_DATE)
+        GROUP BY f.entity_code, d.year
+        HAVING COUNT(DISTINCT d.month_number) = 12
+    ) AS wind ON solar.entity_code = wind.entity_code AND solar.year = wind.year
+),
+annual_capacity AS (
     SELECT
         f.entity_code,
         d.year,
@@ -26,7 +47,7 @@ WITH annual_capacity AS (
     JOIN european_energy_analytics.dim_capacity_series AS s
         ON f.capacity_series_key = s.capacity_series_key
     WHERE
-        d.year IN (2019, 2025)
+        d.year IN ((SELECT start_year FROM comparison_period), (SELECT end_year FROM comparison_period))
         AND s.series_name IN ('Solar', 'Wind')
     GROUP BY
         f.entity_code,
@@ -41,22 +62,22 @@ comparison AS (
         c.country_name,
 
         MAX(CASE
-            WHEN a.year = 2019 AND a.series_name = 'Solar'
+            WHEN a.year = (SELECT start_year FROM comparison_period) AND a.series_name = 'Solar'
             THEN a.avg_capacity_gw
         END) AS solar_2019_gw,
 
         MAX(CASE
-            WHEN a.year = 2025 AND a.series_name = 'Solar'
+            WHEN a.year = (SELECT end_year FROM comparison_period) AND a.series_name = 'Solar'
             THEN a.avg_capacity_gw
         END) AS solar_2025_gw,
 
         MAX(CASE
-            WHEN a.year = 2019 AND a.series_name = 'Wind'
+            WHEN a.year = (SELECT start_year FROM comparison_period) AND a.series_name = 'Wind'
             THEN a.avg_capacity_gw
         END) AS wind_2019_gw,
 
         MAX(CASE
-            WHEN a.year = 2025 AND a.series_name = 'Wind'
+            WHEN a.year = (SELECT end_year FROM comparison_period) AND a.series_name = 'Wind'
             THEN a.avg_capacity_gw
         END) AS wind_2025_gw
 
