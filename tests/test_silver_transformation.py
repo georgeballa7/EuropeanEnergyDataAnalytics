@@ -55,3 +55,16 @@ def test_new_record_replaces_existing_business_key():
 
     assert len(result) == 1
     assert result.iloc[0]["generation_twh"] == 9.5
+
+
+def test_repeated_merge_is_idempotent():
+    new = pd.DataFrame({
+        "entity_code": ["DEU", "FRA"],
+        "date": pd.to_datetime(["2026-07-01", "2026-07-01"]),
+        "series": ["Solar", "Solar"],
+        "generation_twh": [8.0, 6.0],
+    })
+    once = merge_silver_snapshot(None, new, "generation")
+    twice = merge_silver_snapshot(once, new, "generation")
+
+    pd.testing.assert_frame_equal(once, twice)
