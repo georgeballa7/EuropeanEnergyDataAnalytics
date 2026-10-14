@@ -82,7 +82,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ../src:/opt/airflow/project/src
       - ../config:/opt/airflow/project/config
-    - ../sql:/opt/airflow/project/sql:ro
+      - ../sql:/opt/airflow/project/sql:ro
       - ./config:/opt/airflow/config
       - ${USERPROFILE}/.aws:/home/airflow/.aws:ro
 
