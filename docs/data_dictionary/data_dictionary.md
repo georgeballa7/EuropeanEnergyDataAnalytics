@@ -27,7 +27,7 @@ Generation and emissions contain aggregate as well as component series. These mu
 
 `demand_twh` represents monthly electricity demand. Carbon intensity is an intensity measure and must not be summed across months. Installed capacity is a stock measure; monthly capacity observations must likewise not be summed when comparing installed capacity over time.
 
-Capacity has narrower geographic coverage than the core datasets. Missing countries therefore represent source-coverage limitations rather than automatically constituting a data-quality failure.
+The four core monthly datasets have a configured 41-market scope; capacity ingestion has 13 configured markets. Capacity has narrower geographic coverage than the core datasets. Missing countries therefore represent source-coverage limitations rather than automatically constituting a data-quality failure.
 
 ## Analytics Gold Reporting Tables
 
@@ -41,3 +41,7 @@ Each reporting table contains country-level comparisons between a start and end 
 | `analytics_installed_solar_wind_capacity` | `country_name`, `start_year`, `end_year`, solar/wind capacity in GW and percentage changes | 10 |
 
 The latter two marts do not expose `entity_code`; do not assume identical schemas across reporting tables. A percentage-point change in a share is not the same as a percentage relative change. Source SQL definitions are maintained under [`sql/analytics/`](../../sql/analytics/).
+
+## Bronze profile provenance
+
+[`bronze_data_profile.csv`](bronze_data_profile.csv) is a **historical initial exploratory sample**, not an up-to-date inventory. Its recorded 20-country core coverage and 12-country capacity coverage describe that earlier source snapshot. The `profile_scope` column labels each row accordingly. Do not substitute those historical row counts for current Silver/Core Gold or Analytics Gold coverage. The notebook `notebooks/02_data_understanding.ipynb` can regenerate a new profile after deliberately selecting and loading an appropriate source snapshot.
