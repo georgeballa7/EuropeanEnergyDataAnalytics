@@ -16,6 +16,7 @@ def test_failed_unload_does_not_change_glue(monkeypatch):
     athena = MagicMock()
     glue = MagicMock()
     monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1 AS value")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "test-fingerprint")
     monkeypatch.setattr(publisher, "get_columns", lambda client, sql: [
         {"Name": "value", "Type": "integer"}
     ])
@@ -34,6 +35,7 @@ def test_empty_snapshot_does_not_change_glue(monkeypatch):
     athena = MagicMock()
     glue = MagicMock()
     monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1 AS value")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "test-fingerprint")
     monkeypatch.setattr(publisher, "get_columns", lambda client, sql: [
         {"Name": "value", "Type": "integer"}
     ])
