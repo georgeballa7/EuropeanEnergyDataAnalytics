@@ -141,65 +141,49 @@ comparison AS (
         p.start_year AS common_start_year,
         p.end_year AS common_end_year,
 
-        COALESCE(COALESCE(COALESCE(COALESCE(COALESCE(COALESCE(MAX(CASE
-                WHEN s.year = p.start_year
-                     AND s.energy_category = 'Renewable'
-                THEN s.generation_share_pct
-            END), 0.0) AS renewable_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Renewable'
+            THEN s.generation_share_pct
+        END), 0.0) AS renewable_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.end_year
-                     AND s.energy_category = 'Renewable'
-                THEN s.generation_share_pct
-            END), 0.0) AS renewable_end_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Renewable'
+            THEN s.generation_share_pct
+        END), 0.0) AS renewable_end_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.start_year
-                     AND s.energy_category = 'Fossil'
-                THEN s.generation_share_pct
-            END), 0.0) AS fossil_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Fossil'
+            THEN s.generation_share_pct
+        END), 0.0) AS fossil_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.end_year
-                     AND s.energy_category = 'Fossil'
-                THEN s.generation_share_pct
-            END), 0.0) AS fossil_end_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Fossil'
+            THEN s.generation_share_pct
+        END), 0.0) AS fossil_end_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.start_year
-                     AND s.energy_category = 'Clean'
-                THEN s.generation_share_pct
-            END), 0.0) AS clean_start_pct,
+        COALESCE(MAX(CASE
+            WHEN s.year = p.start_year
+             AND s.energy_category = 'Clean'
+            THEN s.generation_share_pct
+        END), 0.0) AS clean_start_pct,
 
-        MAX(
-            CASE
-                WHEN s.year = p.end_year
-                     AND s.energy_category = 'Clean'
-                THEN s.generation_share_pct
-            END), 0.0) AS clean_end_pct
+        COALESCE(MAX(CASE
+            WHEN s.year = p.end_year
+             AND s.energy_category = 'Clean'
+            THEN s.generation_share_pct
+        END), 0.0) AS clean_end_pct
 
     FROM annual_shares AS s
-
     CROSS JOIN comparison_period AS p
-
     JOIN eligible_countries AS ec
         ON s.entity_code = ec.entity_code
-
-    WHERE s.year IN (
-        p.start_year,
-        p.end_year
-    )
-
-    GROUP BY
-        s.entity_code,
-        p.start_year,
-        p.end_year
+    WHERE s.year IN (p.start_year, p.end_year)
+    GROUP BY s.entity_code, p.start_year, p.end_year
 )
-
 SELECT
     c.country_name,
     x.entity_code,
