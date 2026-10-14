@@ -59,3 +59,38 @@ def test_failed_athena_query_raises():
     }
     with pytest.raises(RuntimeError, match="AccessDenied"):
         publisher.wait_for_query(client, "query-id")
+
+
+def test_unchanged_source_skips_publication(monkeypatch):
+    athena = MagicMock()
+    glue = MagicMock()
+    monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "same")
+    glue.get_table.return_value = {"Table": {
+        "Parameters": {"analytics_fingerprint": "same", "analytics_row_count": "38"},
+        "StorageDescriptor": {"Location": "s3://bucket/existing/"},
+    }}
+    result = publisher.publish_mart("generation_demand_summary", athena=athena, glue=glue)
+    assert result["skipped"] is True
+    assert result["rows"] == 38
+    athena.start_query_execution.assert_not_called()
+    glue.create_table.assert_not_called()
+    glue.update_table.assert_not_called()
+
+
+def test_fingerprint_is_independent_of_row_order(monkeypatch):
+    athena = MagicMock()
+    monkeypatch.setattr(publisher, "execute", lambda client, sql: "query")
+    metadata = {"ColumnInfo": [{"Name": "country_name", "Type": "varchar"}]}
+
+    def response(values):
+        return {"ResultSet": {"ResultSetMetadata": metadata, "Rows": [
+            {"Data": [{"VarCharValue": "country_name"}]},
+            *[{"Data": [{"VarCharValue": value}]} for value in values],
+        ]}}
+
+    athena.get_query_results.return_value = response(["Germany", "Austria"])
+    first = publisher.source_fingerprint(athena, "SELECT country_name")
+    athena.get_query_results.return_value = response(["Austria", "Germany"])
+    second = publisher.source_fingerprint(athena, "SELECT country_name")
+    assert first == second
