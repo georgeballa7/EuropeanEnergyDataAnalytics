@@ -45,11 +45,21 @@ def execute(client, query: str) -> str:
     return query_id
 
 
+def glue_compatible_type(athena_type: str) -> str:
+    """Translate Athena result types to Glue/Hive-compatible types."""
+    normalized = athena_type.strip().lower()
+    if normalized == "varchar" or normalized.startswith("varchar("):
+        return "string"
+    if normalized == "integer":
+        return "int"
+    return normalized
+
+
 def get_columns(client, select_sql: str) -> list[dict]:
     query_id = execute(client, f"SELECT * FROM ({select_sql}) AS report LIMIT 0")
     metadata = client.get_query_results(QueryExecutionId=query_id, MaxResults=1)["ResultSet"]["ResultSetMetadata"]
     columns = [
-        {"Name": col["Name"], "Type": col["Type"]}
+        {"Name": col["Name"], "Type": glue_compatible_type(col["Type"])}
         for col in metadata["ColumnInfo"]
     ]
     if not columns:
