@@ -5,6 +5,8 @@ location is switched only after successful query execution and validation.
 Previous snapshots are retained for rollback.
 """
 
+import hashlib
+import json
 import time
 import uuid
 
@@ -55,6 +57,42 @@ def get_columns(client, select_sql: str) -> list[dict]:
     return columns
 
 
+def source_fingerprint(client, sql: str) -> str:
+    """Hash the actual reporting result and SQL, not the Airflow run ID.
+
+    Sorting rows makes the fingerprint independent of Athena's row order.
+    This is suitable for our small country-level reporting marts.
+    """
+    query_id = execute(client, sql)
+    rows = []
+    token = None
+    first_page = True
+    columns = None
+    while True:
+        kwargs = {"QueryExecutionId": query_id, "MaxResults": 1000}
+        if token:
+            kwargs["NextToken"] = token
+        result = client.get_query_results(**kwargs)
+        if columns is None:
+            columns = [(c["Name"], c["Type"]) for c in result["ResultSet"]["ResultSetMetadata"]["ColumnInfo"]]
+        page = result["ResultSet"].get("Rows", [])
+        if first_page:
+            page = page[1:]  # Athena SELECT result header
+            first_page = False
+        for row in page:
+            rows.append([value.get("VarCharValue") for value in row["Data"]])
+        token = result.get("NextToken")
+        if not token:
+            break
+    if not rows:
+        raise ValueError("Reporting query returned no rows")
+    payload = json.dumps(
+        {"sql": sql, "columns": columns, "rows": sorted(rows, key=lambda row: json.dumps(row))},
+        ensure_ascii=False, separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
     if mart_name not in REPORTING_MARTS:
         raise ValueError(f"Unknown analytics mart: {mart_name}")
@@ -62,6 +100,19 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
     athena = athena or boto3.client("athena", region_name=REGION_NAME)
     glue = glue or boto3.client("glue", region_name=REGION_NAME)
     sql = load_mart_sql(mart_name)
+    fingerprint = source_fingerprint(athena, sql)
+    table_name = mart_table_name(mart_name)
+    try:
+        current_table = glue.get_table(DatabaseName=DATABASE_NAME, Name=table_name)["Table"]
+    except glue.exceptions.EntityNotFoundException:
+        current_table = None
+    if current_table and current_table.get("Parameters", {}).get("analytics_fingerprint") == fingerprint:
+        return {
+            "mart": mart_name,
+            "rows": int(current_table["Parameters"]["analytics_row_count"]),
+            "location": current_table["StorageDescriptor"]["Location"],
+            "skipped": True,
+        }
     columns = get_columns(athena, sql)
 
     # A unique destination avoids Athena UNLOAD's nonempty-prefix restriction.
@@ -119,11 +170,11 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
     finally:
         execute(athena, f'DROP TABLE IF EXISTS "{DATABASE_NAME}"."{staging_table}"')
 
-    table_name = mart_table_name(mart_name)
     table_input = {
         "Name": table_name,
         "TableType": "EXTERNAL_TABLE",
-        "Parameters": {"classification": "parquet", "EXTERNAL": "TRUE"},
+        "Parameters": {"classification": "parquet", "EXTERNAL": "TRUE",
+                       "analytics_fingerprint": fingerprint, "analytics_row_count": str(count)},
         "StorageDescriptor": {
             "Columns": columns,
             "Location": snapshot_uri,
@@ -141,7 +192,7 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
         glue.create_table(DatabaseName=DATABASE_NAME, TableInput=table_input)
     else:
         glue.update_table(DatabaseName=DATABASE_NAME, TableInput=table_input)
-    return {"mart": mart_name, "rows": count, "location": snapshot_uri}
+    return {"mart": mart_name, "rows": count, "location": snapshot_uri, "skipped": False}
 
 
 def publish_all_marts() -> list[dict]:
