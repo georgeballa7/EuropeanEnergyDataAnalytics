@@ -106,3 +106,7 @@ erDiagram
 - `dim_capacity_series` uses a separate `capacity_series_key` because capacity-series aggregation semantics can differ from generation and emissions.
 
 The PK/FK relationships shown here are logical analytical relationships. Athena does not physically enforce these constraints.
+
+## Analytics Gold reporting layer
+
+The ERD above describes the **nine-table Core Gold dimensional model** (four dimensions, five facts), not the separate reporting marts. The pipeline additionally publishes four country-level Analytics Gold tables through Athena UNLOAD, S3 Parquet and Glue: `analytics_generation_demand_summary`, `analytics_energy_mix_transition_summary`, `analytics_emissions_carbon_intensity` and `analytics_installed_solar_wind_capacity`. They compare 2019–2025 and are additive to Core Gold. Verified reporting rows (2026-10-14): **38 / 38 / 38 / 10**; Core Gold is configured for 41 European markets and installed capacity ingestion for 13.
