@@ -78,22 +78,54 @@ annual_data AS (
 ),
 
 comparison_period AS (
-    SELECT
-        2019 AS first_year,
-        MAX(year) AS latest_year
-    FROM annual_data
-    WHERE year < YEAR(CURRENT_DATE)
+    -- One shared rule across all four analytical comparisons.
+    -- Require a complete calendar year in every source dataset.
+    SELECT 2019 AS start_year, MAX(year) AS end_year
+    FROM (
+        SELECT d.year, 'generation' AS source_name, COUNT(DISTINCT d.month_number) AS months
+        FROM european_energy_analytics.fact_generation f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'demand', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_demand f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'emissions', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_emissions f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'carbon_intensity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_carbon_intensity f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'solar_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Solar'
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'wind_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Wind'
+        GROUP BY d.year
+    ) AS coverage
+    WHERE year >= 2019 AND year < YEAR(CURRENT_DATE) AND months = 12
+    GROUP BY year
+    HAVING COUNT(DISTINCT source_name) = 6
 ),
 
 country_period AS (
     SELECT
         a.entity_code,
-        p.first_year,
-        p.latest_year
+        p.start_year,
+        p.end_year
     FROM annual_data AS a
     CROSS JOIN comparison_period AS p
-    WHERE a.year IN (p.first_year, p.latest_year)
-    GROUP BY a.entity_code, p.first_year, p.latest_year
+    WHERE a.year IN (p.start_year, p.end_year)
+    GROUP BY a.entity_code, p.start_year, p.end_year
     HAVING COUNT(DISTINCT a.year) = 2
 )
 
@@ -101,8 +133,8 @@ SELECT
     c.country_name,
     p.entity_code,
 
-    p.first_year,
-    p.latest_year,
+    p.start_year,
+    p.end_year,
 
     ROUND(first_data.domestic_generation_twh, 2)
         AS first_generation_twh,
@@ -143,11 +175,11 @@ FROM country_period AS p
 
 JOIN annual_data AS first_data
     ON p.entity_code = first_data.entity_code
-   AND p.first_year = first_data.year
+   AND p.start_year = first_data.year
 
 JOIN annual_data AS latest_data
     ON p.entity_code = latest_data.entity_code
-   AND p.latest_year = latest_data.year
+   AND p.end_year = latest_data.year
 
 JOIN european_energy_analytics.dim_country AS c
     ON p.entity_code = c.entity_code
