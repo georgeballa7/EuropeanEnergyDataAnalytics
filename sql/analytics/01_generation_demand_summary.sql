@@ -115,6 +115,8 @@ comparison_period AS (
     WHERE year >= 2019 AND year < YEAR(CURRENT_DATE) AND months = 12
     GROUP BY year
     HAVING COUNT(DISTINCT source_name) = 6
+    ORDER BY end_year DESC
+    LIMIT 1
 ),
 
 country_period AS (
