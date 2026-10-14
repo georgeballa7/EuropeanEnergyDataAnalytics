@@ -127,12 +127,22 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
     # Reading from the S3 snapshot requires the temporary external table;
     # create it under a unique name and remove it before publishing.
     staging_table = f"_staging_{mart_table_name(mart_name)}_{uuid.uuid4().hex[:12]}"
-    column_ddl = ", ".join(f'"{col["Name"]}" {col["Type"]}' for col in columns)
-    execute(
-        athena,
-        f'CREATE EXTERNAL TABLE "{DATABASE_NAME}"."{staging_table}" '
-        f"({column_ddl}) STORED AS PARQUET LOCATION '{snapshot_uri}'",
-    )
+    staging_input = {
+        "Name": staging_table,
+        "TableType": "EXTERNAL_TABLE",
+        "Parameters": {"classification": "parquet", "EXTERNAL": "TRUE"},
+        "StorageDescriptor": {
+            "Columns": columns,
+            "Location": snapshot_uri,
+            "InputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
+            "OutputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+            "SerdeInfo": {
+                "SerializationLibrary": "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
+                "Parameters": {"serialization.format": "1"},
+            },
+        },
+    }
+    glue.create_table(DatabaseName=DATABASE_NAME, TableInput=staging_input)
     try:
         query_id = execute(
             athena,
@@ -168,7 +178,7 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
         if duplicates:
             raise ValueError(f"Duplicate reporting country-period rows in {mart_name}: {duplicates}")
     finally:
-        execute(athena, f'DROP TABLE IF EXISTS "{DATABASE_NAME}"."{staging_table}"')
+        glue.delete_table(DatabaseName=DATABASE_NAME, Name=staging_table)
 
     table_input = {
         "Name": table_name,
