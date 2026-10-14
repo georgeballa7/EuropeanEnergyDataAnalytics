@@ -91,6 +91,21 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
         count = int(rows[1]["Data"][0]["VarCharValue"])
         if count <= 0:
             raise ValueError(f"Empty analytics snapshot: {mart_name}")
+
+        # All four reporting marts are one-row-per-country comparisons.
+        # Do not publish incomplete or duplicated country-level results.
+        names = {col["Name"] for col in columns}
+        if "country_name" not in names or not {"start_year", "end_year"} <= names:
+            raise ValueError(f"Missing reporting dimensions: {mart_name}")
+        check_id = execute(
+            athena,
+            f'SELECT COUNT(*) AS invalid_rows FROM "{DATABASE_NAME}"."{staging_table}" '
+            'WHERE country_name IS NULL OR start_year IS NULL OR end_year IS NULL',
+        )
+        check_rows = athena.get_query_results(QueryExecutionId=check_id)["ResultSet"]["Rows"]
+        invalid = int(check_rows[1]["Data"][0]["VarCharValue"])
+        if invalid:
+            raise ValueError(f"Invalid reporting dimensions in {mart_name}: {invalid}")
     finally:
         execute(athena, f'DROP TABLE IF EXISTS "{DATABASE_NAME}"."{staging_table}"')
 
