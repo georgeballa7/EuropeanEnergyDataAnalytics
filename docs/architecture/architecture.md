@@ -62,13 +62,16 @@ flowchart LR
     B["Bronze Ingestion"] --> S["Silver Transformation<br/>+ Silver DQ"]
     S --> G["Gold Transformation<br/>+ Gold DQ"]
     G --> C["Glue Catalog Sync<br/>Silver + Gold tables"]
-    C --> A["Athena<br/>european-energy-analytics"]
+    C --> A["Athena<br/>Post-load Gold DQ"]
+    A --> Q["Gold Tables<br/>Query Validation"]
 
     TF["Terraform"] -. provisions .-> AWS["S3 · Glue Database<br/>Athena Workgroup · IAM"]
     AWS -. supports .-> B
     AWS -. supports .-> C
     AWS -. supports .-> A
 ```
+
+The DAG contains five sequential tasks: Bronze ingestion, Silver transformation and validation, Gold transformation and validation, Glue catalog synchronization, and Athena post-load validation. The final task checks all nine queryable Gold tables for nonempty data, required fields, unique keys and valid fact foreign keys. Failures stop the DAG and trigger its configured failure callback.
 
 The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
 
