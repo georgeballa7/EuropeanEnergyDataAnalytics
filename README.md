@@ -67,6 +67,7 @@ The project analyses electricity generation and demand, energy-mix transition, p
 
 ## Documentation
 
+- [Local Setup and Operations Runbook](docs/operations/runbook.md)
 - [Architecture](docs/architecture/architecture.md)
 - [Gold Data Model / ERD](docs/architecture/gold_erd.md)
 - [Data Dictionary](docs/data_dictionary/data_dictionary.md)
