@@ -4,7 +4,7 @@
 -- change across European countries between 2019 and 2025?
 --
 -- Analysis period:
--- 2019 vs. 2025 (shared comparison years; both require 12 months)
+-- 2019 vs. latest complete year available for both metrics
 --
 -- Notes:
 -- - Total emissions use the aggregate series "Total generation"
@@ -13,7 +13,27 @@
 -- - Carbon intensity is calculated as the unweighted average of monthly gCO2/kWh values.
 -- - Both comparison years must contain 12 months of observations.
 
-WITH annual_emissions AS (
+WITH comparison_period AS (
+    SELECT 2019 AS start_year, MAX(e.year) AS end_year
+    FROM (
+        SELECT f.entity_code, d.year
+        FROM european_energy_analytics.fact_emissions AS f
+        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
+        JOIN european_energy_analytics.dim_energy_series AS s ON f.series_key = s.series_key
+        WHERE s.series_name = 'Total generation' AND d.year < YEAR(CURRENT_DATE)
+        GROUP BY f.entity_code, d.year
+        HAVING COUNT(DISTINCT d.month_number) = 12
+    ) AS e
+    JOIN (
+        SELECT f.entity_code, d.year
+        FROM european_energy_analytics.fact_carbon_intensity AS f
+        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
+        WHERE d.year < YEAR(CURRENT_DATE)
+        GROUP BY f.entity_code, d.year
+        HAVING COUNT(DISTINCT d.month_number) = 12
+    ) AS i ON e.entity_code = i.entity_code AND e.year = i.year
+),
+annual_emissions AS (
     SELECT
         f.entity_code,
         d.year,
@@ -25,7 +45,7 @@ WITH annual_emissions AS (
         ON f.series_key = s.series_key
     WHERE
         s.series_name = 'Total generation'
-        AND d.year IN (2019, 2025)
+        AND d.year IN ((SELECT start_year FROM comparison_period), (SELECT end_year FROM comparison_period))
     GROUP BY
         f.entity_code,
         d.year
@@ -42,7 +62,7 @@ annual_intensity AS (
     JOIN european_energy_analytics.dim_date AS d
         ON f.date = d.date
     WHERE
-        d.year IN (2019, 2025)
+        d.year IN ((SELECT start_year FROM comparison_period), (SELECT end_year FROM comparison_period))
     GROUP BY
         f.entity_code,
         d.year
@@ -54,16 +74,16 @@ comparison AS (
         c.entity_code,
         c.country_name,
 
-        MAX(CASE WHEN e.year = 2019
+        MAX(CASE WHEN e.year = (SELECT start_year FROM comparison_period)
             THEN e.emissions_mtco2 END) AS emissions_2019_mtco2,
-        MAX(CASE WHEN e.year = 2025
+        MAX(CASE WHEN e.year = (SELECT end_year FROM comparison_period)
             THEN e.emissions_mtco2 END) AS emissions_2025_mtco2,
 
-        MAX(CASE WHEN i.year = 2019
+        MAX(CASE WHEN i.year = (SELECT start_year FROM comparison_period)
             THEN i.avg_carbon_intensity_gco2_per_kwh END)
             AS carbon_intensity_2019,
 
-        MAX(CASE WHEN i.year = 2025
+        MAX(CASE WHEN i.year = (SELECT end_year FROM comparison_period)
             THEN i.avg_carbon_intensity_gco2_per_kwh END)
             AS carbon_intensity_2025
 
