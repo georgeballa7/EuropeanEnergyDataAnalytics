@@ -90,6 +90,8 @@ comparison AS (
 )
 
 SELECT
+    (SELECT start_year FROM comparison_period) AS start_year,
+    (SELECT end_year FROM comparison_period) AS end_year,
     country_name,
 
     ROUND(solar_2019_gw, 2) AS solar_2019_gw,
