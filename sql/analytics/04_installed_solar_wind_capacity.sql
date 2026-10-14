@@ -4,7 +4,7 @@
 -- across European countries?
 --
 -- Analysis period:
--- 2016 vs. 2025
+-- 2019 vs. 2025 (shared comparison years)
 --
 -- Notes:
 -- - Country coverage is determined by complete observations in both comparison years.
@@ -26,7 +26,7 @@ WITH annual_capacity AS (
     JOIN european_energy_analytics.dim_capacity_series AS s
         ON f.capacity_series_key = s.capacity_series_key
     WHERE
-        d.year IN (2016, 2025)
+        d.year IN (2019, 2025)
         AND s.series_name IN ('Solar', 'Wind')
     GROUP BY
         f.entity_code,
@@ -41,9 +41,9 @@ comparison AS (
         c.country_name,
 
         MAX(CASE
-            WHEN a.year = 2016 AND a.series_name = 'Solar'
+            WHEN a.year = 2019 AND a.series_name = 'Solar'
             THEN a.avg_capacity_gw
-        END) AS solar_2016_gw,
+        END) AS solar_2019_gw,
 
         MAX(CASE
             WHEN a.year = 2025 AND a.series_name = 'Solar'
@@ -51,9 +51,9 @@ comparison AS (
         END) AS solar_2025_gw,
 
         MAX(CASE
-            WHEN a.year = 2016 AND a.series_name = 'Wind'
+            WHEN a.year = 2019 AND a.series_name = 'Wind'
             THEN a.avg_capacity_gw
-        END) AS wind_2016_gw,
+        END) AS wind_2019_gw,
 
         MAX(CASE
             WHEN a.year = 2025 AND a.series_name = 'Wind'
@@ -71,26 +71,26 @@ comparison AS (
 SELECT
     country_name,
 
-    ROUND(solar_2016_gw, 2) AS solar_2016_gw,
+    ROUND(solar_2019_gw, 2) AS solar_2019_gw,
     ROUND(solar_2025_gw, 2) AS solar_2025_gw,
 
     ROUND(
-        100.0 * (solar_2025_gw - solar_2016_gw)
-        / NULLIF(solar_2016_gw, 0),
+        100.0 * (solar_2025_gw - solar_2019_gw)
+        / NULLIF(solar_2019_gw, 0),
         1
     ) AS solar_change_pct,
 
-    ROUND(wind_2016_gw, 2) AS wind_2016_gw,
+    ROUND(wind_2019_gw, 2) AS wind_2019_gw,
     ROUND(wind_2025_gw, 2) AS wind_2025_gw,
 
     ROUND(
-        100.0 * (wind_2025_gw - wind_2016_gw)
-        / NULLIF(wind_2016_gw, 0),
+        100.0 * (wind_2025_gw - wind_2019_gw)
+        / NULLIF(wind_2019_gw, 0),
         1
     ) AS wind_change_pct,
 
-    ROUND(solar_2016_gw + wind_2016_gw, 2)
-        AS solar_wind_2016_gw,
+    ROUND(solar_2019_gw + wind_2019_gw, 2)
+        AS solar_wind_2019_gw,
 
     ROUND(solar_2025_gw + wind_2025_gw, 2)
         AS solar_wind_2025_gw,
@@ -98,16 +98,16 @@ SELECT
     ROUND(
         100.0 * (
             (solar_2025_gw + wind_2025_gw)
-            - (solar_2016_gw + wind_2016_gw)
+            - (solar_2019_gw + wind_2019_gw)
         )
-        / NULLIF(solar_2016_gw + wind_2016_gw, 0),
+        / NULLIF(solar_2019_gw + wind_2019_gw, 0),
         1
     ) AS solar_wind_change_pct
 
 FROM comparison
 WHERE
-    solar_2016_gw IS NOT NULL
+    solar_2019_gw IS NOT NULL
     AND solar_2025_gw IS NOT NULL
-    AND wind_2016_gw IS NOT NULL
+    AND wind_2019_gw IS NOT NULL
     AND wind_2025_gw IS NOT NULL
 ORDER BY solar_wind_change_pct DESC;
