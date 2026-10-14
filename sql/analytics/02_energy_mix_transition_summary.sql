@@ -11,6 +11,7 @@
 -- - Länder ohne vollständige Daten in beiden Jahren ausgeschlossen
 -- - laufendes Kalenderjahr ausgeschlossen
 -- - Veränderung der Mix-Anteile in Prozentpunkten
+-- - fehlende Energiekategorien in vollständigen Jahren als 0 %
 -- ============================================================
 
 WITH monthly_mix AS (
@@ -140,53 +141,46 @@ comparison AS (
         p.start_year AS common_start_year,
         p.end_year AS common_end_year,
 
-        MAX(
-            CASE
+        COALESCE(COALESCE(COALESCE(COALESCE(COALESCE(COALESCE(MAX(CASE
                 WHEN s.year = p.start_year
                      AND s.energy_category = 'Renewable'
                 THEN s.generation_share_pct
-            END
-        ) AS renewable_start_pct,
+            END), 0.0) AS renewable_start_pct,
 
         MAX(
             CASE
                 WHEN s.year = p.end_year
                      AND s.energy_category = 'Renewable'
                 THEN s.generation_share_pct
-            END
-        ) AS renewable_end_pct,
+            END), 0.0) AS renewable_end_pct,
 
         MAX(
             CASE
                 WHEN s.year = p.start_year
                      AND s.energy_category = 'Fossil'
                 THEN s.generation_share_pct
-            END
-        ) AS fossil_start_pct,
+            END), 0.0) AS fossil_start_pct,
 
         MAX(
             CASE
                 WHEN s.year = p.end_year
                      AND s.energy_category = 'Fossil'
                 THEN s.generation_share_pct
-            END
-        ) AS fossil_end_pct,
+            END), 0.0) AS fossil_end_pct,
 
         MAX(
             CASE
                 WHEN s.year = p.start_year
                      AND s.energy_category = 'Clean'
                 THEN s.generation_share_pct
-            END
-        ) AS clean_start_pct,
+            END), 0.0) AS clean_start_pct,
 
         MAX(
             CASE
                 WHEN s.year = p.end_year
                      AND s.energy_category = 'Clean'
                 THEN s.generation_share_pct
-            END
-        ) AS clean_end_pct
+            END), 0.0) AS clean_end_pct
 
     FROM annual_shares AS s
 
