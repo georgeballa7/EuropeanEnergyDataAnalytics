@@ -41,7 +41,7 @@ def test_gold_dq_detects_orphan_country_foreign_key():
     gold = valid_gold_datasets()
     gold["fact_generation"].loc[0, "entity_code"] = "FRA"
     result = validate_foreign_keys(gold)
-    assert result["fact_generation"]["passed"] is False
+    assert not result["fact_generation"]["passed"]
     assert result["fact_generation"]["orphan_countries"] == 1
 
 
