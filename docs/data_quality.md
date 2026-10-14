@@ -26,7 +26,7 @@ Gold is persisted only after the complete model passes validation.
 
 ## Athena Post-Load Validation
 
-The final Airflow task, `validate_persisted_gold`, queries all nine Gold tables using the existing `european-energy-analytics` Athena workgroup. It verifies:
+The fifth Airflow task, `validate_persisted_gold`, queries all nine Gold tables using the existing `european-energy-analytics` Athena workgroup. It verifies:
 
 - each dimension and fact table contains records
 - required key and measure fields are non-null
@@ -34,6 +34,14 @@ The final Airflow task, `validate_persisted_gold`, queries all nine Gold tables 
 - fact foreign keys resolve to the corresponding dimensions
 
 The task fails on invalid data, Athena query errors or query timeouts. This checks the queryable data in S3 through the Glue catalog, complementing the in-memory transformation checks. See [`src/quality/athena_quality.py`](../src/quality/athena_quality.py) for the implementation. The checks validate structural integrity; they do not establish completeness of source coverage or independent correctness of all analytical measures.
+
+## Analytics Gold Publication Checks
+
+After the Core Gold Athena quality gate, the sixth task `publish_analytics_gold` publishes four additional reporting marts. For each mart it checks that the Parquet snapshot can be queried through a temporary Glue table, contains at least one row, has non-null `country_name`, `start_year` and `end_year`, and has no duplicate country-period combinations. The final Glue table is updated only after those checks succeed. Temporary Glue tables are removed after validation.
+
+The published mart counts verified in Athena on 2026-10-14 were 38 (generation/demand), 38 (energy mix), 38 (emissions/intensity), and 10 (solar/wind capacity). These counts do not imply that the 41-market configured scope was reduced. Missing period comparisons and narrower capacity source coverage affect reporting completeness.
+
+For unchanged SQL and result data, a stored fingerprint prevents repeat publication; this does not provide atomic publication across all four marts or guarantee that failed UNLOAD snapshots are automatically removed.
 
 ## Source-Aware Validation
 
