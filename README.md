@@ -49,6 +49,53 @@ The Terraform CI workflow validates configuration, generates an AWS-backed saved
 
 Airflow sends task failure notifications to Slack. CloudWatch monitors Athena failed-query metrics and routes alarm notifications through the existing SNS email topic.
 
+## Getting Started and Operations
+
+The project runs Apache Airflow locally with Docker Compose and uses AWS services in `eu-central-1`. You will need Python 3.12, Docker Desktop, AWS CLI, Terraform >= 1.16 and authorized access to the existing project AWS environment. **Cloning the repository does not provision an independent AWS environment**: the Terraform backend points to the project's existing remote state.
+
+### Local setup
+
+```powershell
+git clone https://github.com/georgeballa7/EuropeanEnergyDataAnalytics.git
+cd EuropeanEnergyDataAnalytics
+Copy-Item .env.example .env
+# Set EMBER_API_KEY in .env; never commit credentials
+python -m pip install -r requirements.txt
+python -m pytest -v
+```
+
+Configure the `energy-pipeline` AWS CLI profile and verify the target identity before running cloud operations:
+
+```powershell
+aws sts get-caller-identity --profile energy-pipeline
+```
+
+### Run Airflow
+
+```powershell
+docker compose -f airflow/docker-compose.yaml build
+docker compose -f airflow/docker-compose.yaml run --rm airflow-init
+docker compose -f airflow/docker-compose.yaml up -d
+docker compose -f airflow/docker-compose.yaml ps
+```
+
+Open the Airflow UI at [localhost:8081](http://localhost:8081). Check the DAG and AWS credentials before triggering a run; manual runs can incur AWS charges. Inspect service logs with `docker compose -f airflow/docker-compose.yaml logs --tail=100 airflow-scheduler`. Stop services without removing local metadata using `docker compose -f airflow/docker-compose.yaml down`.
+
+### Infrastructure and verification
+
+Terraform is configured in `infra/terraform/`. To validate configuration **without accessing or modifying remote state**:
+
+```powershell
+cd infra/terraform
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+```
+
+Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify Airflow task status, new Bronze objects, Silver/Gold snapshots, Glue tables and representative Athena results.
+
+For complete setup requirements, troubleshooting, safe recovery procedures and the reproducibility checklist, see the **[Local Setup and Operations Runbook](docs/operations/runbook.md)**.
+
 ## Data Coverage
 
 The project scope contains 41 European markets available from Ember. Electricity generation, demand, power-sector emissions and carbon intensity use the full configured European scope. Installed capacity uses a smaller dataset-specific country scope because Ember provides monthly capacity data for fewer markets.
