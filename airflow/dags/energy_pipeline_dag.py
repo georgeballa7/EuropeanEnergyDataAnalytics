@@ -10,6 +10,7 @@ import pendulum
 
 from airflow.sdk import DAG, task
 
+from src.analytics.publish_marts import publish_all_marts
 from src.catalog.glue_catalog import update_glue_catalog
 from src.quality.athena_quality import validate_athena_gold
 from src.ingestion.run_ingestion import run_ingestion
@@ -57,10 +58,16 @@ with DAG(
         """Validate registered Gold tables through Athena."""
         validate_athena_gold()
 
+    @task
+    def publish_analytics_gold():
+        """Publish validated reporting snapshots in separate Gold tables."""
+        publish_all_marts()
+
     bronze = extract_and_load_bronze()
     silver = transform_bronze_to_silver()
     gold = transform_silver_to_gold()
     glue = synchronize_glue_catalog()
     athena_validation = validate_persisted_gold()
+    analytics = publish_analytics_gold()
 
-    bronze >> silver >> gold >> glue >> athena_validation
+    bronze >> silver >> gold >> glue >> athena_validation >> analytics

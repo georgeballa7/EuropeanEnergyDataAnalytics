@@ -1,0 +1,126 @@
+"""Unit tests for isolated Gold analytics snapshot publishing."""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.analytics import publish_marts as publisher
+
+
+def test_reject_unknown_mart():
+    with pytest.raises(ValueError, match="Unknown analytics mart"):
+        publisher.publish_mart("fact_generation")
+
+
+def test_failed_unload_does_not_change_glue(monkeypatch):
+    athena = MagicMock()
+    glue = MagicMock()
+    monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1 AS value")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "test-fingerprint")
+    monkeypatch.setattr(publisher, "get_columns", lambda client, sql: [
+        {"Name": "value", "Type": "integer"}
+    ])
+
+    def failed_execute(client, query):
+        raise RuntimeError("UNLOAD failed")
+
+    monkeypatch.setattr(publisher, "execute", failed_execute)
+    with pytest.raises(RuntimeError, match="UNLOAD failed"):
+        publisher.publish_mart("generation_demand_summary", athena=athena, glue=glue)
+    glue.create_table.assert_not_called()
+    glue.update_table.assert_not_called()
+
+
+def test_empty_snapshot_does_not_change_glue(monkeypatch):
+    athena = MagicMock()
+    glue = MagicMock()
+    monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1 AS value")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "test-fingerprint")
+    monkeypatch.setattr(publisher, "get_columns", lambda client, sql: [
+        {"Name": "value", "Type": "integer"}
+    ])
+    monkeypatch.setattr(publisher, "execute", lambda client, query: "query-id")
+    athena.get_query_results.return_value = {"ResultSet": {"Rows": [
+        {"Data": [{"VarCharValue": "total_rows"}]},
+        {"Data": [{"VarCharValue": "0"}]},
+    ]}}
+    with pytest.raises(ValueError, match="Empty analytics snapshot"):
+        publisher.publish_mart("generation_demand_summary", athena=athena, glue=glue)
+    assert glue.create_table.call_count == 1
+    staging = glue.create_table.call_args.kwargs["TableInput"]["Name"]
+    assert staging.startswith("_staging_analytics_")
+    glue.delete_table.assert_called_once_with(
+        DatabaseName=publisher.DATABASE_NAME, Name=staging
+    )
+    glue.update_table.assert_not_called()
+
+
+def test_failed_athena_query_raises():
+    client = MagicMock()
+    client.get_query_execution.return_value = {
+        "QueryExecution": {"Status": {
+            "State": "FAILED", "StateChangeReason": "AccessDenied"
+        }}
+    }
+    with pytest.raises(RuntimeError, match="AccessDenied"):
+        publisher.wait_for_query(client, "query-id")
+
+
+def test_unchanged_source_skips_publication(monkeypatch):
+    athena = MagicMock()
+    glue = MagicMock()
+    monkeypatch.setattr(publisher, "load_mart_sql", lambda name: "SELECT 1")
+    monkeypatch.setattr(publisher, "source_fingerprint", lambda client, sql: "same")
+    glue.get_table.return_value = {"Table": {
+        "Parameters": {"analytics_fingerprint": "same", "analytics_row_count": "38"},
+        "StorageDescriptor": {"Location": "s3://bucket/existing/"},
+    }}
+    result = publisher.publish_mart("generation_demand_summary", athena=athena, glue=glue)
+    assert result["skipped"] is True
+    assert result["rows"] == 38
+    athena.start_query_execution.assert_not_called()
+    glue.create_table.assert_not_called()
+    glue.update_table.assert_not_called()
+
+
+def test_fingerprint_is_independent_of_row_order(monkeypatch):
+    athena = MagicMock()
+    monkeypatch.setattr(publisher, "execute", lambda client, sql: "query")
+    metadata = {"ColumnInfo": [{"Name": "country_name", "Type": "varchar"}]}
+
+    def response(values):
+        return {"ResultSet": {"ResultSetMetadata": metadata, "Rows": [
+            {"Data": [{"VarCharValue": "country_name"}]},
+            *[{"Data": [{"VarCharValue": value}]} for value in values],
+        ]}}
+
+    athena.get_query_results.return_value = response(["Germany", "Austria"])
+    first = publisher.source_fingerprint(athena, "SELECT country_name")
+    athena.get_query_results.return_value = response(["Austria", "Germany"])
+    second = publisher.source_fingerprint(athena, "SELECT country_name")
+    assert first == second
+
+
+def test_glue_type_conversion():
+    assert publisher.glue_compatible_type("varchar") == "string"
+    assert publisher.glue_compatible_type("varchar(100)") == "string"
+    assert publisher.glue_compatible_type("integer") == "int"
+    assert publisher.glue_compatible_type("decimal(12,2)") == "decimal(12,2)"
+    assert publisher.glue_compatible_type("double") == "double"
+
+
+def test_get_columns_uses_glue_compatible_types(monkeypatch):
+    athena = MagicMock()
+    monkeypatch.setattr(publisher, "execute", lambda client, sql: "query")
+    athena.get_query_results.return_value = {
+        "ResultSet": {"ResultSetMetadata": {"ColumnInfo": [
+            {"Name": "country_name", "Type": "varchar"},
+            {"Name": "start_year", "Type": "integer"},
+            {"Name": "generation_twh", "Type": "double"},
+        ]}}
+    }
+    assert publisher.get_columns(athena, "SELECT 1") == [
+        {"Name": "country_name", "Type": "string"},
+        {"Name": "start_year", "Type": "int"},
+        {"Name": "generation_twh", "Type": "double"},
+    ]

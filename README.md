@@ -15,6 +15,9 @@ flowchart LR
     AT --> DQ["Post-load Gold Validation<br/>9 Tables"]
     DQ -. validation failure .-> AF
     AT --> BI["Power BI"]
+    DQ --> AM["Analytics Gold<br/>4 Parquet Reporting Marts"]
+    AM --> AGL["Glue Analytics Tables"]
+    AGL --> AT
 
     TF["Terraform"] -. provisions .-> AWS["S3 · Glue DB<br/>Athena · IAM · CloudWatch · SNS"]
     AF -. failure alerts .-> SL["Slack"]
@@ -41,7 +44,8 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - Versioned and encrypted S3 remote Terraform state with native locking
 - CI checks for pytest and Terraform formatting/validation; AWS-authenticated Terraform planning via GitHub OIDC with a guard against delete/replacement operations
 - Serverless SQL analytics through the dedicated `european-energy-analytics` Athena workgroup
-- Power BI reporting over the Gold model through Athena
+- Power BI reporting over the existing nine-table Core Gold model through Athena
+- Four additive Analytics Gold reporting marts, published as validated Parquet snapshots with unchanged-result detection
 
 ## Infrastructure, CI/CD and Monitoring
 
@@ -94,7 +98,7 @@ terraform init -backend=false
 terraform validate
 ```
 
-Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify all five Airflow tasks, including `validate_persisted_gold`, along with Bronze objects, Silver/Gold snapshots, Glue tables and Athena validation results.
+Infrastructure changes require explicit review; CI validates and guards Terraform plans but does not automatically apply them. After a controlled pipeline run, verify all six Airflow tasks, including `validate_persisted_gold` and `publish_analytics_gold`, along with Bronze objects, Silver/Gold snapshots, Glue tables and Athena validation results.
 
 For complete setup requirements, troubleshooting, safe recovery procedures and the reproducibility checklist, see the **[Local Setup and Operations Runbook](docs/operations/runbook.md)**.
 
@@ -104,15 +108,26 @@ The project scope contains 41 European markets available from Ember. Electricity
 
 The regular pipeline remains incremental. Historical scope expansions are handled through an explicit backfill workflow that writes source responses to Bronze without changing the persistent incremental ingestion state. Silver and Gold snapshots are then rebuilt and validated from the expanded source history.
 
-## Power BI Dashboard
+## Analytics & Reporting
+
+The Power BI report explores four questions about the evolution of European electricity systems. It combines the existing dimensional **Core Gold** model (nine tables) with four purpose-built **Analytics Gold** reporting marts, published as Parquet datasets in Amazon S3 and made queryable through AWS Glue and Amazon Athena.
+
+| Analytical area | Key question | Analytics Gold table |
+| --- | --- | --- |
+| **Generation & Demand** | How have electricity production, consumption and cross-border electricity balances evolved? | `analytics_generation_demand_summary` |
+| **Energy Mix & Transition** | How have renewable, fossil and clean electricity-generation shares changed? | `analytics_energy_mix_transition_summary` |
+| **Emissions & Carbon Intensity** | How have power-sector CO₂ emissions and the carbon intensity of electricity generation developed? | `analytics_emissions_carbon_intensity` |
+| **Installed Capacity** | How have installed solar and wind capacities evolved across European markets? | `analytics_installed_solar_wind_capacity` |
+
+The reporting marts provide **country-level comparisons for 2019–2025**, including baseline and latest-year values and changes over time. Coverage reflects source-data availability: the generation/demand, energy-mix and emissions comparisons currently include **38 countries each**, while the solar/wind capacity comparison includes **10 countries**. The underlying Core Gold dataset covers **41 European markets**.
+
+The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
+
+### Power BI report
+
+The interactive report contains an introduction, executive overview, dedicated pages for each of the four analytical areas, and a conclusions page. The [PDF export](powerbi/EuropeanEnergyAnalytics.pdf) provides a shareable snapshot; the `.pbix` file in [`powerbi/`](powerbi/) contains the editable report.
 
 ![Executive Overview](powerbi/screenshots/Page02.png)
-
-[View the complete Power BI report (PDF)](powerbi/EuropeanEnergyAnalytics.pdf)
-
-## Analytics
-
-The project analyses electricity generation and demand, energy-mix transition, power-sector emissions and carbon intensity, and installed solar and wind capacity. The final Athena SQL queries are available in [`sql/analytics/`](sql/analytics/).
 
 ## Documentation
 

@@ -99,6 +99,7 @@ data "aws_iam_policy_document" "glue_catalog_access" {
       "glue:GetTables",
       "glue:CreateTable",
       "glue:UpdateTable",
+      "glue:DeleteTable",
     ]
 
     resources = ["*"]
