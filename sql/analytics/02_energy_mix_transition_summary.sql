@@ -3,11 +3,12 @@
 -- Wie hat sich der Stromerzeugungsmix im Zeitverlauf verändert?
 --
 -- Methodik:
--- - alle Länder mit vollständiger Datenabdeckung im gemeinsamen Vergleichszeitraum
+-- - Länder mit vollständigen Daten in beiden Vergleichsjahren
 -- - nur nicht-aggregierte Erzeugungsreihen
 -- - Net Imports ausgeschlossen
 -- - nur vollständige Kalenderjahre
--- - gemeinsamer Vergleichszeitraum aller Länder
+-- - Basisjahr 2019; Endjahr ist das jüngste vollständige Datenjahr
+-- - Länder ohne vollständige Daten in beiden Jahren ausgeschlossen
 -- - laufendes Kalenderjahr ausgeschlossen
 -- - Veränderung der Mix-Anteile in Prozentpunkten
 -- ============================================================
@@ -116,34 +117,32 @@ annual_shares AS (
        AND m.year = t.year
 ),
 
-country_coverage AS (
+comparison_period AS (
     SELECT
-        entity_code,
-        MIN(year) AS first_complete_year,
-        MAX(year) AS last_complete_year
-
+        2019 AS start_year,
+        MAX(year) AS end_year
     FROM annual_total
-
-    GROUP BY entity_code
+    WHERE year < YEAR(CURRENT_DATE)
 ),
 
-common_period AS (
-    SELECT
-        MAX(first_complete_year) AS common_start_year,
-        MIN(last_complete_year) AS common_end_year
-
-    FROM country_coverage
+eligible_countries AS (
+    SELECT a.entity_code
+    FROM annual_total AS a
+    CROSS JOIN comparison_period AS p
+    WHERE a.year IN (p.start_year, p.end_year)
+    GROUP BY a.entity_code
+    HAVING COUNT(DISTINCT a.year) = 2
 ),
 
 comparison AS (
     SELECT
         s.entity_code,
-        p.common_start_year,
-        p.common_end_year,
+        p.start_year AS common_start_year,
+        p.end_year AS common_end_year,
 
         MAX(
             CASE
-                WHEN s.year = p.common_start_year
+                WHEN s.year = p.start_year
                      AND s.energy_category = 'Renewable'
                 THEN s.generation_share_pct
             END
@@ -151,7 +150,7 @@ comparison AS (
 
         MAX(
             CASE
-                WHEN s.year = p.common_end_year
+                WHEN s.year = p.end_year
                      AND s.energy_category = 'Renewable'
                 THEN s.generation_share_pct
             END
@@ -159,7 +158,7 @@ comparison AS (
 
         MAX(
             CASE
-                WHEN s.year = p.common_start_year
+                WHEN s.year = p.start_year
                      AND s.energy_category = 'Fossil'
                 THEN s.generation_share_pct
             END
@@ -167,7 +166,7 @@ comparison AS (
 
         MAX(
             CASE
-                WHEN s.year = p.common_end_year
+                WHEN s.year = p.end_year
                      AND s.energy_category = 'Fossil'
                 THEN s.generation_share_pct
             END
@@ -175,7 +174,7 @@ comparison AS (
 
         MAX(
             CASE
-                WHEN s.year = p.common_start_year
+                WHEN s.year = p.start_year
                      AND s.energy_category = 'Clean'
                 THEN s.generation_share_pct
             END
@@ -183,7 +182,7 @@ comparison AS (
 
         MAX(
             CASE
-                WHEN s.year = p.common_end_year
+                WHEN s.year = p.end_year
                      AND s.energy_category = 'Clean'
                 THEN s.generation_share_pct
             END
@@ -191,17 +190,20 @@ comparison AS (
 
     FROM annual_shares AS s
 
-    CROSS JOIN common_period AS p
+    CROSS JOIN comparison_period AS p
+
+    JOIN eligible_countries AS ec
+        ON s.entity_code = ec.entity_code
 
     WHERE s.year IN (
-        p.common_start_year,
-        p.common_end_year
+        p.start_year,
+        p.end_year
     )
 
     GROUP BY
         s.entity_code,
-        p.common_start_year,
-        p.common_end_year
+        p.start_year,
+        p.end_year
 )
 
 SELECT
