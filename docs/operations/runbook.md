@@ -101,11 +101,18 @@ The documented data flow is:
 2. Cleaning, merge and validation → S3 Silver Parquet snapshots.
 3. Dimensional transformations and integrity checks → S3 Gold Parquet snapshots.
 4. Explicit Glue catalog registration for Silver and Gold tables.
-5. Athena post-load validation of all nine Gold tables → Power BI Import report.
+5. Athena post-load validation of all nine Core Gold tables.
+6. Analytics Gold publication of four additional Parquet reporting marts and Glue tables. Existing Power BI Import reporting remains based on the unchanged Core Gold model.
 
 Before a manual run, check the intended Ember dataset/country scope and the existing S3 incremental ingestion state. Historical backfills are **separate maintenance operations** and should not be substituted for regular incremental ingestion.
 
-After a run, verify that all five Airflow tasks succeeded, especially `validate_persisted_gold`. Check expected new Bronze objects, updated Silver/Gold snapshots, Glue table metadata and Athena validation results. The final task queries the existing `european-energy-analytics` workgroup and fails on empty Gold tables, null required fields, duplicate keys, invalid foreign keys, Athena errors or timeouts. Compare counts, country coverage and source periods with the project's [data-quality rules](../data_quality.md). A successful Airflow run alone does not prove analytical correctness.
+After a run, verify that all six Airflow tasks succeeded, especially `validate_persisted_gold` and `publish_analytics_gold`. Check expected new Bronze objects, updated Silver/Gold snapshots, Glue table metadata and Athena validation results. The final task queries the existing `european-energy-analytics` workgroup and fails on empty Gold tables, null required fields, duplicate keys, invalid foreign keys, Athena errors or timeouts. Compare counts, country coverage and source periods with the project's [data-quality rules](../data_quality.md). A successful Airflow run alone does not prove analytical correctness.
+
+### Analytics Gold publication and retry behavior
+
+The publisher executes four reporting marts sequentially. A successful first integration run (2026-10-14) yielded 38, 38, 38 and 10 rows; Athena independently confirmed these counts. The project covers 41 markets overall, but comparison-year completeness and capacity-source coverage limit the reporting result sets.
+
+For unchanged reporting SQL and result rows, the fingerprint stored on each final Glue table causes the publisher to skip a new snapshot. After partial failure, rerun the publisher or DAG: already completed unchanged marts are skipped. **This is not atomic multi-table publication or exactly-once processing.** Do not run concurrent publishers. Failed attempts can leave unreferenced snapshots; inspect current Glue locations before any cleanup. If the Compose SQL mount was added after container creation, recreate Airflow services with `docker compose -f airflow/docker-compose.yaml up -d --force-recreate airflow-apiserver airflow-scheduler airflow-dag-processor` (without `down -v`).
 
 ## 6. Troubleshooting and recovery
 
@@ -117,6 +124,7 @@ After a run, verify that all five Airflow tasks succeeded, especially `validate_
 | Ember API failure | API key, HTTP response, rate limits and request scope | Retry only after identifying the cause; avoid duplicate backfill loads |
 | Data-quality failure | Failed task logs, input schema, keys and source coverage | Correct source/configuration or transformation; do not bypass validations |
 | Terraform drift or planned replacement | Plan output, variable values, remote-state ownership and resource taint | Stop; investigate before any apply or state manipulation |
+| Analytics Gold failure | Confirm SQL volume is mounted at `/opt/airflow/project/sql/analytics/`, Athena query status, Glue `string` column types and staging table cleanup | Correct the cause and rerun; completed marts with identical fingerprints are skipped. Do not delete Glue-referenced snapshots |
 | Athena failure | Workgroup, Glue table schema, S3 paths, query permissions and results location | Inspect `validate_persisted_gold` logs and query execution details; check CloudWatch/SNS where applicable |
 
 For recovery, prefer correcting the root cause and rerunning the relevant validated pipeline stage. Never manually overwrite Bronze history, Silver/Gold snapshots, or Terraform state without a reviewed recovery plan. S3 object versioning and recovery capabilities depend on the actual bucket configuration; verify them before relying on rollback.
@@ -137,7 +145,9 @@ A successful deployment or configuration check is not equivalent to a tested not
 - [ ] AWS account and region are verified.
 - [ ] Airflow services start and the DAG is visible.
 - [ ] A controlled run completes with expected Bronze/Silver/Gold outputs.
-- [ ] Glue and Athena return expected data; `validate_persisted_gold` succeeds for all nine Gold tables.
+- [ ] Glue and Athena return expected data; `validate_persisted_gold` succeeds for all nine Core Gold tables.
+- [ ] `publish_analytics_gold` succeeds; four `analytics_*` Glue tables are queryable in Athena.
+- [ ] A repeated Analytics Gold run with unchanged results returns `skipped: True` and unchanged snapshot locations.
 - [ ] Terraform validation passes without changing infrastructure.
 - [ ] No credentials, state files or saved plans are committed.
 
