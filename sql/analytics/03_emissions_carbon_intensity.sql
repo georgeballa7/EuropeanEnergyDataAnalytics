@@ -10,7 +10,8 @@
 -- - Total emissions use the aggregate series "Total generation"
 --   to avoid double counting individual generation technologies.
 -- - Annual emissions are calculated as the sum of monthly MtCO2 values.
--- - Carbon intensity is calculated as the average of monthly gCO2/kWh values.
+-- - Carbon intensity is calculated as the unweighted average of monthly gCO2/kWh values.
+-- - Both comparison years must contain 12 months of observations.
 
 WITH annual_emissions AS (
     SELECT
@@ -28,6 +29,7 @@ WITH annual_emissions AS (
     GROUP BY
         f.entity_code,
         d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 annual_intensity AS (
@@ -44,6 +46,7 @@ annual_intensity AS (
     GROUP BY
         f.entity_code,
         d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 comparison AS (
