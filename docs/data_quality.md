@@ -11,7 +11,7 @@ Each dataset has an explicit business key and required measurement columns. Vali
 - null values in business-key and measurement columns
 - unexpected countries outside the configured project scope
 
-The validation deliberately does not require every dataset to contain every configured European market because source coverage differs by dataset. Generation, demand, emissions and carbon intensity use the 41-market European project scope, while installed capacity uses its configured Ember-supported subset. Detailed Silver rules are available in [`silver_data_quality_guidelines.md`](decisions/silver_data_quality_guidelines.md).
+The validation deliberately does not require every dataset to contain every configured European market because source coverage differs by dataset. Generation, demand, emissions and carbon intensity use the 41-market European project scope, while installed capacity uses **13 configured Ember-supported markets**. The API request start is **2010-01**; actual historical availability can be shorter and differs by dataset and market. Detailed Silver rules are available in [`silver_data_quality_guidelines.md`](decisions/silver_data_quality_guidelines.md).
 
 ## Gold
 
@@ -48,3 +48,7 @@ For unchanged SQL and result data, a stored fingerprint prevents repeat publicat
 The project avoids generic cleaning rules that would alter valid source semantics. Statistical outliers are retained, missing observations are not imputed, negative net-import values are allowed, and aggregate-series metadata is preserved to support correct analytical aggregation.
 
 A successful DQ result therefore means that the data satisfies the project's defined structural and relational rules; it does not imply identical temporal or geographic coverage across all source datasets.
+
+## Historical Bronze profile
+
+The checked-in [`bronze_data_profile.csv`](data_dictionary/bronze_data_profile.csv) is an initial exploratory sample (20 core countries and 12 capacity countries), not a live data-quality baseline. Its `profile_scope` field explicitly marks historical observations. Validate current country coverage and periods from the configured scope and actual persisted Silver/Gold data, rather than assuming the old CSV counts remain current.
