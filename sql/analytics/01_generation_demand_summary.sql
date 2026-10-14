@@ -39,6 +39,7 @@ WITH annual_generation AS (
     GROUP BY
         g.entity_code,
         d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 annual_demand AS (
@@ -57,6 +58,7 @@ annual_demand AS (
     GROUP BY
         f.entity_code,
         d.year
+    HAVING COUNT(DISTINCT d.month_number) = 12
 ),
 
 annual_data AS (
