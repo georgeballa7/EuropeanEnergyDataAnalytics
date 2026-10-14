@@ -15,25 +15,43 @@
 -- - Current calendar year is excluded; future complete years are selected automatically.
 
 WITH comparison_period AS (
-    SELECT 2019 AS start_year, MAX(solar.year) AS end_year
+    -- One shared rule across all four analytical comparisons.
+    -- Require a complete calendar year in every source dataset.
+    SELECT 2019 AS start_year, MAX(year) AS end_year
     FROM (
-        SELECT f.entity_code, d.year
-        FROM european_energy_analytics.fact_capacity AS f
-        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
-        JOIN european_energy_analytics.dim_capacity_series AS s ON f.capacity_series_key = s.capacity_series_key
-        WHERE s.series_name = 'Solar' AND d.year < YEAR(CURRENT_DATE)
-        GROUP BY f.entity_code, d.year
-        HAVING COUNT(DISTINCT d.month_number) = 12
-    ) AS solar
-    JOIN (
-        SELECT f.entity_code, d.year
-        FROM european_energy_analytics.fact_capacity AS f
-        JOIN european_energy_analytics.dim_date AS d ON f.date = d.date
-        JOIN european_energy_analytics.dim_capacity_series AS s ON f.capacity_series_key = s.capacity_series_key
-        WHERE s.series_name = 'Wind' AND d.year < YEAR(CURRENT_DATE)
-        GROUP BY f.entity_code, d.year
-        HAVING COUNT(DISTINCT d.month_number) = 12
-    ) AS wind ON solar.entity_code = wind.entity_code AND solar.year = wind.year
+        SELECT d.year, 'generation' AS source_name, COUNT(DISTINCT d.month_number) AS months
+        FROM european_energy_analytics.fact_generation f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'demand', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_demand f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'emissions', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_emissions f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'carbon_intensity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_carbon_intensity f JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'solar_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Solar'
+        GROUP BY d.year
+        UNION ALL
+        SELECT d.year, 'wind_capacity', COUNT(DISTINCT d.month_number)
+        FROM european_energy_analytics.fact_capacity f
+        JOIN european_energy_analytics.dim_date d ON f.date = d.date
+        JOIN european_energy_analytics.dim_capacity_series s ON f.capacity_series_key = s.capacity_series_key
+        WHERE s.series_name = 'Wind'
+        GROUP BY d.year
+    ) AS coverage
+    WHERE year >= 2019 AND year < YEAR(CURRENT_DATE) AND months = 12
+    GROUP BY year
+    HAVING COUNT(DISTINCT source_name) = 6
 ),
 annual_capacity AS (
     SELECT
