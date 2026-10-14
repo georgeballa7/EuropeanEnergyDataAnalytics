@@ -26,7 +26,7 @@ Terraform manages the stable AWS infrastructure: the project S3 bucket configura
 
 ## Source Scope
 
-The configured analytical scope contains 41 Ember-supported European markets. Electricity generation, demand, power-sector emissions and carbon intensity use this common scope. Installed capacity uses a dataset-specific subset because Ember exposes monthly capacity data for fewer European markets.
+The configured analytical scope contains 41 Ember-supported European markets. Electricity generation, demand, power-sector emissions and carbon intensity use this common scope. Installed capacity uses **13 configured European markets** because Ember exposes monthly capacity data for fewer markets. The configured API request starts in **2010-01**, but actual available periods vary by dataset and country; the reporting marts use 2019–2025 comparisons with 38/38/38/10 observed country rows (verified 2026-10-14).
 
 Geographic scope is configuration-driven rather than embedded in transformation logic, allowing source coverage to evolve without changing the core pipeline.
 
@@ -34,7 +34,7 @@ Geographic scope is configuration-driven rather than embedded in transformation 
 
 The ingestion layer retrieves monthly electricity data from the Ember Energy API. Before downloading a dataset, the pipeline checks the latest available source month and compares it with a persistent ingestion state stored in S3. Only new source periods are requested.
 
-Bronze stores the complete API response as JSON and remains append-only, preserving source-faithful ingestion history and traceability. A profile of the Bronze source data is available in [`docs/data_dictionary/bronze_data_profile.csv`](../data_dictionary/bronze_data_profile.csv).
+Bronze stores the complete API response as JSON and remains append-only, preserving source-faithful ingestion history and traceability. A [historical initial Bronze sample profile](../data_dictionary/bronze_data_profile.csv) is retained for provenance. Its 20-country core and 12-country capacity observations predate the current configuration and are **not** live project coverage statistics.
 
 Historical scope expansions use a separate targeted backfill entry point. Backfills load explicitly selected countries from the configured historical start date, respect dataset-specific country coverage and write the source response to Bronze without reading or modifying the regular incremental ingestion state. Downstream Silver and Gold snapshots are then rebuilt and validated from the expanded Bronze history.
 
