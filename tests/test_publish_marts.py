@@ -124,3 +124,124 @@ def test_get_columns_uses_glue_compatible_types(monkeypatch):
         {"Name": "start_year", "Type": "int"},
         {"Name": "generation_twh", "Type": "double"},
     ]
+
+
+def _prepared(name, previous=None, skipped=False):
+    return {
+        "mart": name, "rows": 38, "location": f"s3://bucket/{name}/",
+        "skipped": skipped, "previous_table": previous,
+        "table_input": None if skipped else {"Name": publisher.mart_table_name(name)},
+    }
+
+
+def test_prepare_failure_does_not_publish_any_table(monkeypatch):
+    glue = MagicMock()
+    names = list(publisher.REPORTING_MARTS)
+    attempted = []
+
+    def prepare(name, **kwargs):
+        attempted.append(name)
+        if name == names[2]:
+            raise RuntimeError("prepare failed")
+        return _prepared(name)
+
+    monkeypatch.setattr(publisher, "prepare_mart", prepare)
+    with pytest.raises(RuntimeError, match="prepare failed"):
+        publisher.publish_all_marts(athena=MagicMock(), glue=glue)
+    assert attempted == names[:3]
+    glue.create_table.assert_not_called()
+    glue.update_table.assert_not_called()
+
+
+def test_all_snapshots_prepared_before_any_publication(monkeypatch):
+    names = list(publisher.REPORTING_MARTS)
+    events = []
+    glue = MagicMock()
+
+    def prepare(name, **kwargs):
+        events.append(("prepare", name))
+        return _prepared(name)
+
+    def publish(item, client):
+        events.append(("publish", item["mart"]))
+
+    monkeypatch.setattr(publisher, "prepare_mart", prepare)
+    monkeypatch.setattr(publisher, "_publish_prepared", publish)
+    result = publisher.publish_all_marts(athena=MagicMock(), glue=glue)
+    assert events == [("prepare", n) for n in names] + [("publish", n) for n in names]
+    assert len(result) == 4
+
+
+def test_publish_failure_rolls_back_in_reverse_order(monkeypatch):
+    names = list(publisher.REPORTING_MARTS)
+    events = []
+    monkeypatch.setattr(
+        publisher, "prepare_mart",
+        lambda name, **kwargs: _prepared(name, previous={
+            "Name": publisher.mart_table_name(name),
+            "StorageDescriptor": {"Location": f"s3://old/{name}/"},
+            "Parameters": {},
+        }),
+    )
+
+    def publish(item, glue):
+        events.append(("publish", item["mart"]))
+        if item["mart"] == names[2]:
+            raise RuntimeError("update failed")
+
+    def rollback(item, glue):
+        events.append(("rollback", item["mart"]))
+
+    monkeypatch.setattr(publisher, "_publish_prepared", publish)
+    monkeypatch.setattr(publisher, "_rollback_prepared", rollback)
+    with pytest.raises(RuntimeError, match="update failed"):
+        publisher.publish_all_marts(athena=MagicMock(), glue=MagicMock())
+    assert events == (
+        [("publish", n) for n in names[:3]]
+        + [("rollback", n) for n in reversed(names[:3])]
+    )
+
+
+def test_rollback_failure_is_reported(monkeypatch):
+    names = list(publisher.REPORTING_MARTS)
+    monkeypatch.setattr(publisher, "prepare_mart", lambda name, **kwargs: _prepared(name))
+
+    def publish(item, glue):
+        if item["mart"] == names[1]:
+            raise ValueError("original failure")
+
+    def rollback(item, glue):
+        if item["mart"] == names[0]:
+            raise RuntimeError("rollback denied")
+
+    monkeypatch.setattr(publisher, "_publish_prepared", publish)
+    monkeypatch.setattr(publisher, "_rollback_prepared", rollback)
+    with pytest.raises(RuntimeError, match="rollback incomplete.*rollback denied") as err:
+        publisher.publish_all_marts(athena=MagicMock(), glue=MagicMock())
+    assert isinstance(err.value.__cause__, ValueError)
+
+
+def test_skipped_marts_are_not_published_or_rolled_back(monkeypatch):
+    names = list(publisher.REPORTING_MARTS)
+    glue = MagicMock()
+    monkeypatch.setattr(
+        publisher, "prepare_mart",
+        lambda name, **kwargs: _prepared(name, skipped=True),
+    )
+    result = publisher.publish_all_marts(athena=MagicMock(), glue=glue)
+    assert len(result) == len(names)
+    assert all(item["skipped"] for item in result)
+    glue.create_table.assert_not_called()
+    glue.update_table.assert_not_called()
+
+
+def test_restore_table_input_removes_glue_read_only_fields():
+    original = {
+        "Name": "analytics_example", "CreateTime": "read-only",
+        "DatabaseName": "db", "StorageDescriptor": {"Location": "s3://old/"},
+        "Parameters": {"analytics_fingerprint": "old"},
+    }
+    restored = publisher._restore_table_input(original)
+    assert "CreateTime" not in restored
+    assert "DatabaseName" not in restored
+    assert restored["StorageDescriptor"]["Location"] == "s3://old/"
