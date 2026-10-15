@@ -41,7 +41,7 @@ After the Core Gold Athena quality gate, the sixth task `publish_analytics_gold`
 
 The published mart counts verified in Athena on 2026-10-14 were 38 (generation/demand), 38 (energy mix), 38 (emissions/intensity), and 10 (solar/wind capacity). These counts do not imply that the 41-market configured scope was reduced. Missing period comparisons and narrower capacity source coverage affect reporting completeness.
 
-For unchanged SQL and result data, a stored fingerprint prevents repeat publication. The publisher prepares and validates **all four** marts before changing final Glue tables, then updates those tables sequentially. If an update fails, it attempts **best-effort rollback** of every touched table. This is not an atomic multi-table transaction: readers may observe intermediate states, rollback may fail, and failed UNLOAD snapshots are not automatically removed.
+For unchanged SQL and result data, a stored fingerprint prevents repeat publication. The publisher prepares and validates **all four** marts before changing final Glue tables, then updates those tables sequentially. If an update fails, it attempts **best-effort rollback** of every touched table. The previous Glue table definitions are retained for recovery, while prepared snapshots remain available for investigation.
 
 ## Source-Aware Validation
 
