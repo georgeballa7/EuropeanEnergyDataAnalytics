@@ -245,3 +245,57 @@ def test_restore_table_input_removes_glue_read_only_fields():
     assert "CreateTime" not in restored
     assert "DatabaseName" not in restored
     assert restored["StorageDescriptor"]["Location"] == "s3://old/"
+
+
+def test_rollback_restores_existing_table_definition():
+    from unittest.mock import Mock
+
+    glue = MagicMock()
+    old = {
+        "Name": "analytics_generation_demand_summary",
+        "DatabaseName": publisher.DATABASE_NAME,
+        "CreateTime": "read-only",
+        "TableType": "EXTERNAL_TABLE",
+        "StorageDescriptor": {"Location": "s3://bucket/old/"},
+        "Parameters": {"analytics_fingerprint": "old"},
+    }
+    glue.get_table.return_value = {"Table": {
+        **old, "StorageDescriptor": {"Location": "s3://bucket/new/"}
+    }}
+    item = _prepared("generation_demand_summary", previous=old)
+    publisher._rollback_prepared(item, glue)
+    restored = glue.update_table.call_args.kwargs["TableInput"]
+    assert restored["StorageDescriptor"]["Location"] == "s3://bucket/old/"
+    assert restored["Parameters"]["analytics_fingerprint"] == "old"
+    assert "CreateTime" not in restored
+    assert "DatabaseName" not in restored
+
+
+def test_rollback_of_new_table_deletes_only_if_present():
+    from botocore.exceptions import ClientError
+
+    glue = MagicMock()
+    item = _prepared("generation_demand_summary")
+    glue.get_table.return_value = {"Table": {"Name": publisher.mart_table_name(item["mart"])}}
+    publisher._rollback_prepared(item, glue)
+    glue.delete_table.assert_called_once()
+
+    glue.reset_mock()
+    glue.exceptions.EntityNotFoundException = type("EntityNotFoundException", (Exception,), {})
+    glue.get_table.side_effect = glue.exceptions.EntityNotFoundException()
+    publisher._rollback_prepared(item, glue)
+    glue.delete_table.assert_not_called()
+
+
+def test_rollback_recreates_missing_previous_table():
+    glue = MagicMock()
+    glue.exceptions.EntityNotFoundException = type("EntityNotFoundException", (Exception,), {})
+    glue.get_table.side_effect = glue.exceptions.EntityNotFoundException()
+    previous = {
+        "Name": publisher.mart_table_name("generation_demand_summary"),
+        "StorageDescriptor": {"Location": "s3://bucket/old/"},
+        "Parameters": {"analytics_fingerprint": "old"},
+    }
+    publisher._rollback_prepared(_prepared("generation_demand_summary", previous=previous), glue)
+    glue.create_table.assert_called_once()
+    assert glue.create_table.call_args.kwargs["TableInput"]["StorageDescriptor"]["Location"] == "s3://bucket/old/"
