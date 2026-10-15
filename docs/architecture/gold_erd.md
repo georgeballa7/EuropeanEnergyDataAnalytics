@@ -1,4 +1,4 @@
-# Gold Data Model – ERD
+# Gold Data Model – Core ERD and Analytics Marts
 
 The analytical Gold layer uses a **Fact Constellation / Galaxy Schema**. Multiple fact tables represent different analytical processes while sharing conformed dimensions where their semantics are compatible.
 
@@ -109,4 +109,49 @@ The PK/FK relationships shown here are logical analytical relationships. Athena 
 
 ## Analytics Gold reporting layer
 
-The ERD above describes the **nine-table Core Gold dimensional model** (four dimensions, five facts), not the separate reporting marts. The pipeline additionally publishes four country-level Analytics Gold tables through Athena UNLOAD, S3 Parquet and Glue: `analytics_generation_demand_summary`, `analytics_energy_mix_transition_summary`, `analytics_emissions_carbon_intensity` and `analytics_installed_solar_wind_capacity`. They compare 2019–2025 and are additive to Core Gold. Verified reporting rows (2026-10-14): **38 / 38 / 38 / 10**; Core Gold is configured for 41 European markets and installed capacity ingestion for 13.
+The **Core Gold ERD above remains the authoritative dimensional model**. The four reporting marts are derived country-and-comparison-period datasets, not additional fact tables at the monthly grain. They have no physically enforced foreign keys in Athena and should not be drawn as if they join directly to `dim_date` at month grain.
+
+### Reporting marts and lineage
+
+```mermaid
+flowchart TB
+    subgraph CORE["Core Gold · dimensional model"]
+        C["dim_country · dim_date"]
+        E["dim_energy_series"]
+        CS["dim_capacity_series"]
+        G["fact_generation"]
+        D["fact_demand"]
+        M["fact_emissions"]
+        I["fact_carbon_intensity"]
+        K["fact_capacity"]
+    end
+
+    G --> GD["analytics_generation_demand_summary"]
+    D --> GD
+    C --> GD
+    G --> MIX["analytics_energy_mix_transition_summary"]
+    E --> MIX
+    C --> MIX
+    M --> EM["analytics_emissions_carbon_intensity"]
+    I --> EM
+    E --> EM
+    C --> EM
+    K --> CAP["analytics_installed_solar_wind_capacity"]
+    E --> CAP
+    C --> CAP
+```
+
+All four marts derive year boundaries from Core Gold date coverage. The edges show **SQL derivation dependencies**, not database foreign-key constraints. The last two marts expose `country_name` but **not** `entity_code`, so they cannot be joined to `dim_country` on a code without a schema change or a separate mapping.
+
+### Reporting-mart grain and logical keys
+
+| Analytics Gold table | Grain | Logical uniqueness checked at publication |
+| --- | --- | --- |
+| `analytics_generation_demand_summary` | Country × start year × end year | `country_name, start_year, end_year` |
+| `analytics_energy_mix_transition_summary` | Country × start year × end year | `country_name, start_year, end_year` |
+| `analytics_emissions_carbon_intensity` | Country × start year × end year | `country_name, start_year, end_year` |
+| `analytics_installed_solar_wind_capacity` | Country × start year × end year | `country_name, start_year, end_year` |
+
+These are logical analytical grains. Athena/Glue do not enforce primary-key or foreign-key constraints. See the [data dictionary](../data_dictionary/data_dictionary.md) and [versioned SQL](../../sql/analytics/) for exact measures.
+
+The Core Gold ERD contains **nine tables** (four dimensions, five facts); the lineage diagram above documents the separate Analytics Gold marts. The pipeline additionally publishes four country-level Analytics Gold tables through Athena UNLOAD, S3 Parquet and Glue: `analytics_generation_demand_summary`, `analytics_energy_mix_transition_summary`, `analytics_emissions_carbon_intensity` and `analytics_installed_solar_wind_capacity`. They compare 2019–2025 and are additive to Core Gold. Verified reporting rows (2026-10-14): **38 / 38 / 38 / 10**; Core Gold is configured for 41 European markets and installed capacity ingestion for 13.

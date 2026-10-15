@@ -45,7 +45,7 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - CI checks for pytest and Terraform formatting/validation; AWS-authenticated Terraform planning via GitHub OIDC with a guard against delete/replacement operations
 - Serverless SQL analytics through the dedicated `european-energy-analytics` Athena workgroup
 - Power BI reporting over the existing nine-table Core Gold model through Athena
-- Four additive Analytics Gold reporting marts, published as validated Parquet snapshots with unchanged-result detection
+- Four additive Analytics Gold reporting marts, prepared and validated before Glue publication, with unchanged-result detection and best-effort rollback
 
 ## Infrastructure, CI/CD and Monitoring
 
@@ -121,7 +121,7 @@ The Power BI report explores four questions about the evolution of European elec
 
 The reporting marts provide **country-level comparisons for 2019–2025**, including baseline and latest-year values and changes over time. Coverage reflects source-data availability: the generation/demand, energy-mix and emissions comparisons currently include **38 countries each**, while the solar/wind capacity comparison includes **10 countries**. The underlying Core Gold dataset covers **41 European markets**.
 
-The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
+The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. All four snapshots are prepared and validated before final Glue tables are updated; publication failures trigger restoration of the previous Glue table definitions. The [Gold model and analytics lineage](docs/architecture/gold_erd.md) distinguish dimensional relationships from reporting derivations. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
 
 ### Power BI report
 
@@ -139,4 +139,4 @@ The interactive report contains an introduction, executive overview, dedicated p
 - [Silver Data Quality Guidelines](docs/decisions/silver_data_quality_guidelines.md)
 - [Operations Runbook](docs/operations/runbook.md)
 
-Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The notebooks are exploratory snapshots and do not replace the full incremental Bronze/Silver/Gold pipeline.
+Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The [EDA notebook](notebooks/03_eda.ipynb) reads consolidated historical Silver Parquet snapshots for exploration; it does not replace the incremental Bronze/Silver/Gold pipeline.

@@ -5,6 +5,7 @@ location is switched only after successful query execution and validation.
 Previous snapshots are retained for rollback.
 """
 
+import copy
 import hashlib
 import json
 import time
@@ -103,7 +104,7 @@ def source_fingerprint(client, sql: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
+def prepare_mart(mart_name: str, athena=None, glue=None) -> dict:
     if mart_name not in REPORTING_MARTS:
         raise ValueError(f"Unknown analytics mart: {mart_name}")
 
@@ -122,6 +123,8 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
             "rows": int(current_table["Parameters"]["analytics_row_count"]),
             "location": current_table["StorageDescriptor"]["Location"],
             "skipped": True,
+            "previous_table": current_table,
+            "table_input": None,
         }
     columns = get_columns(athena, sql)
 
@@ -206,15 +209,92 @@ def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
             },
         },
     }
-    try:
-        glue.get_table(DatabaseName=DATABASE_NAME, Name=table_name)
-    except glue.exceptions.EntityNotFoundException:
-        glue.create_table(DatabaseName=DATABASE_NAME, TableInput=table_input)
+    return {
+        "mart": mart_name, "rows": count, "location": snapshot_uri,
+        "skipped": False, "previous_table": current_table,
+        "table_input": table_input,
+    }
+
+
+def _restore_table_input(table: dict) -> dict:
+    """Keep only Glue CreateTable/UpdateTable-compatible definition fields."""
+    allowed = {
+        "Name", "Description", "Owner", "LastAccessTime", "LastAnalyzedTime",
+        "Retention", "StorageDescriptor", "PartitionKeys", "ViewOriginalText",
+        "ViewExpandedText", "TableType", "Parameters", "TargetTable",
+        "ViewDefinition",
+    }
+    return {key: copy.deepcopy(value) for key, value in table.items() if key in allowed}
+
+
+def _publish_prepared(prepared: dict, glue) -> None:
+    if prepared["skipped"]:
+        return
+    args = {"DatabaseName": DATABASE_NAME, "TableInput": prepared["table_input"]}
+    if prepared["previous_table"] is None:
+        glue.create_table(**args)
     else:
-        glue.update_table(DatabaseName=DATABASE_NAME, TableInput=table_input)
-    return {"mart": mart_name, "rows": count, "location": snapshot_uri, "skipped": False}
+        glue.update_table(**args)
 
 
-def publish_all_marts() -> list[dict]:
-    """Run after the persisted Core Gold quality gate has succeeded."""
-    return [publish_mart(name) for name in REPORTING_MARTS]
+def _rollback_prepared(prepared: dict, glue) -> None:
+    name = mart_table_name(prepared["mart"])
+    previous = prepared["previous_table"]
+    try:
+        current = glue.get_table(DatabaseName=DATABASE_NAME, Name=name)["Table"]
+    except glue.exceptions.EntityNotFoundException:
+        current = None
+    if previous is None:
+        if current is not None:
+            glue.delete_table(DatabaseName=DATABASE_NAME, Name=name)
+    elif current is None:
+        glue.create_table(
+            DatabaseName=DATABASE_NAME,
+            TableInput=_restore_table_input(previous),
+        )
+    else:
+        glue.update_table(
+            DatabaseName=DATABASE_NAME,
+            TableInput=_restore_table_input(previous),
+        )
+
+
+def publish_mart(mart_name: str, athena=None, glue=None) -> dict:
+    """Publish one mart; preserve the existing single-mart public API."""
+    glue = glue or boto3.client("glue", region_name=REGION_NAME)
+    prepared = prepare_mart(mart_name, athena=athena, glue=glue)
+    _publish_prepared(prepared, glue)
+    return {key: prepared[key] for key in ("mart", "rows", "location", "skipped")}
+
+
+def publish_all_marts(athena=None, glue=None) -> list[dict]:
+    """Prepare every mart before changing any production Glue table.
+
+    Glue updates are not atomic across tables. If a commit fails, attempt
+    best-effort rollback of every touched table, including the failing one.
+    Snapshots remain immutable for investigation and later cleanup.
+    """
+    athena = athena or boto3.client("athena", region_name=REGION_NAME)
+    glue = glue or boto3.client("glue", region_name=REGION_NAME)
+    prepared = [prepare_mart(name, athena=athena, glue=glue) for name in REPORTING_MARTS]
+    touched = []
+    try:
+        for item in prepared:
+            if item["skipped"]:
+                continue
+            touched.append(item)
+            _publish_prepared(item, glue)
+    except Exception as exc:
+        rollback_errors = []
+        for item in reversed(touched):
+            try:
+                _rollback_prepared(item, glue)
+            except Exception as rollback_exc:
+                rollback_errors.append(f'{item["mart"]}: {rollback_exc}')
+        if rollback_errors:
+            raise RuntimeError(
+                f"Analytics publication failed ({exc}); rollback incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
+    return [{key: item[key] for key in ("mart", "rows", "location", "skipped")} for item in prepared]

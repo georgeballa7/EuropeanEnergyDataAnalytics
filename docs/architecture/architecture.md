@@ -56,7 +56,11 @@ Amazon Athena queries Parquet directly in S3 through the dedicated `european-ene
 
 The final analytical SQL queries are version-controlled under [`sql/analytics/`](../../sql/analytics/). Power BI continues to consume the unchanged nine-table Core Gold model through Athena in Import mode.
 
-The Analytics Gold publisher uses Athena UNLOAD to write four additional Parquet snapshots under `gold/analytics/`. Temporary Glue tables expose snapshots to Athena for validation, after which the publisher creates or updates separate `analytics_*` Glue tables. A SHA-256 fingerprint of SQL, column metadata and sorted query results skips publication when the reporting data has not changed. Each mart is independently published; there is no atomic four-table transaction, distributed writer lock or automatic cleanup of orphaned S3 snapshots.
+The Analytics Gold publisher uses Athena UNLOAD to prepare four immutable Parquet snapshots under `gold/analytics/<mart>/snapshots/<uuid>/`. Temporary Glue tables expose the prepared files to Athena for nonempty, required-dimension and country-period uniqueness checks. A SHA-256 fingerprint of SQL, column metadata and sorted query results skips marts whose reporting data has not changed.
+
+**Prepare → publish → rollback:** `publish_all_marts` prepares and validates **all four marts before modifying any final Glue table**. It then publishes the changed Glue table locations. If an update fails, it attempts best-effort rollback of every touched table to its previous definition (or deletes a newly created table). This provides coordinated preparation and recovery for the four reporting marts. Run only one publisher at a time and inspect Glue table locations before any manual snapshot cleanup. The existing single-mart `publish_mart` API remains separate.
+
+The [Core Gold ERD and Analytics lineage diagram](gold_erd.md) distinguish dimensional relationships from derived reporting tables.
 
 ## Orchestration
 
