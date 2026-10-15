@@ -20,9 +20,9 @@ cd EuropeanEnergyDataAnalytics
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set `EMBER_API_KEY`, `AIRFLOW_JWT_SECRET` (random, at least 64 characters), and `AIRFLOW_POSTGRES_PASSWORD` (strong random alphanumeric value). The latter is interpolated into a PostgreSQL connection URI; avoid URI-reserved characters unless URL-encoded. Never commit `.env` or actual credentials.
+Edit `.env` and set `EMBER_API_KEY`, `AIRFLOW_JWT_SECRET` (random, at least 64 characters), and `AIRFLOW_POSTGRES_PASSWORD` (for an existing PostgreSQL volume, use the **current unchanged database password**; for a fresh installation, choose a strong random alphanumeric value). The latter is interpolated into a PostgreSQL connection URI; avoid URI-reserved characters unless URL-encoded. Never commit `.env` or actual credentials.
 
-**Existing PostgreSQL volume:** If Airflow has already been initialized with the previous PostgreSQL password, changing the Compose environment variable does not update the stored PostgreSQL role password. Update the role password in the existing database first or follow a deliberate metadata migration. Do **not** run `docker compose down -v` to resolve a credential mismatch: it deletes local Airflow metadata.
+**Existing PostgreSQL volume:** Do not rotate the database password as part of this configuration-only change. Set `AIRFLOW_POSTGRES_PASSWORD` to the password already used by the existing PostgreSQL role. Docker Compose environment variables do not change passwords stored in an initialized PostgreSQL volume. Do **not** run `docker compose down -v`: it deletes local Airflow metadata.
 
 Confirm the AWS identity and region **before** any AWS or Terraform operation:
 
