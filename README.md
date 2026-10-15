@@ -121,7 +121,7 @@ The Power BI report explores four questions about the evolution of European elec
 
 The reporting marts provide **country-level comparisons for 2019–2025**, including baseline and latest-year values and changes over time. Coverage reflects source-data availability: the generation/demand, energy-mix and emissions comparisons currently include **38 countries each**, while the solar/wind capacity comparison includes **10 countries**. The underlying Core Gold dataset covers **41 European markets**.
 
-The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. All four snapshots are prepared and validated before final Glue tables are updated; publication failures trigger best-effort rollback, **not** a transactional four-table commit. The [Gold model and analytics lineage](docs/architecture/gold_erd.md) distinguish dimensional relationships from reporting derivations. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
+The analytics are built with reproducible [Athena SQL queries](sql/analytics/) and published automatically after the Core Gold data-quality checks. All four snapshots are prepared and validated before final Glue tables are updated; publication failures trigger restoration of the previous Glue table definitions. The [Gold model and analytics lineage](docs/architecture/gold_erd.md) distinguish dimensional relationships from reporting derivations. This separates reusable data engineering from report-ready analytical outputs and supports consistent comparisons in Power BI.
 
 ### Power BI report
 
