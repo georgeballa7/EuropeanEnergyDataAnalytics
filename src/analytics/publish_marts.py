@@ -230,7 +230,6 @@ def _restore_table_input(table: dict) -> dict:
 def _publish_prepared(prepared: dict, glue) -> None:
     if prepared["skipped"]:
         return
-    name = mart_table_name(prepared["mart"])
     args = {"DatabaseName": DATABASE_NAME, "TableInput": prepared["table_input"]}
     if prepared["previous_table"] is None:
         glue.create_table(**args)
@@ -241,8 +240,18 @@ def _publish_prepared(prepared: dict, glue) -> None:
 def _rollback_prepared(prepared: dict, glue) -> None:
     name = mart_table_name(prepared["mart"])
     previous = prepared["previous_table"]
+    try:
+        current = glue.get_table(DatabaseName=DATABASE_NAME, Name=name)["Table"]
+    except glue.exceptions.EntityNotFoundException:
+        current = None
     if previous is None:
-        glue.delete_table(DatabaseName=DATABASE_NAME, Name=name)
+        if current is not None:
+            glue.delete_table(DatabaseName=DATABASE_NAME, Name=name)
+    elif current is None:
+        glue.create_table(
+            DatabaseName=DATABASE_NAME,
+            TableInput=_restore_table_input(previous),
+        )
     else:
         glue.update_table(
             DatabaseName=DATABASE_NAME,
