@@ -10,7 +10,7 @@ This runbook describes the existing development environment and safe operational
 - A locally configured `~/.aws` directory; the Airflow Compose file mounts it read-only into the containers.
 - Access to any external alert integrations needed to test notifications.
 
-> **Security:** Never commit `.env`, AWS credentials, Terraform state or saved plans. The current Compose configuration includes development-only example authentication values; replace these with secure, environment-specific values before using the deployment outside a trusted local environment. Do not expose the Airflow UI publicly with those values.
+> **Security:** Never commit `.env`, AWS credentials, Terraform state or saved plans. Compose now requires locally supplied `AIRFLOW_JWT_SECRET` and `AIRFLOW_POSTGRES_PASSWORD`. The UI binds to `127.0.0.1:8081`; do not expose it publicly. The local Airflow simple-auth administrator is for trusted development only.
 
 ## 1. Clone and configure
 
@@ -20,7 +20,9 @@ cd EuropeanEnergyDataAnalytics
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set `EMBER_API_KEY` to your own value. Other settings used by runtime integrations must be configured according to the corresponding project code and environment; do not put secrets in tracked files.
+Edit `.env` and set `EMBER_API_KEY`, `AIRFLOW_JWT_SECRET` (random, at least 64 characters), and `AIRFLOW_POSTGRES_PASSWORD` (strong random alphanumeric value). The latter is interpolated into a PostgreSQL connection URI; avoid URI-reserved characters unless URL-encoded. Never commit `.env` or actual credentials.
+
+**Existing PostgreSQL volume:** If Airflow has already been initialized with the previous PostgreSQL password, changing the Compose environment variable does not update the stored PostgreSQL role password. Update the role password in the existing database first or follow a deliberate metadata migration. Do **not** run `docker compose down -v` to resolve a credential mismatch: it deletes local Airflow metadata.
 
 Confirm the AWS identity and region **before** any AWS or Terraform operation:
 
@@ -50,10 +52,10 @@ The Compose configuration is in `airflow/docker-compose.yaml` and builds the ima
 Run these commands from the repository root:
 
 ```powershell
-docker compose -f airflow/docker-compose.yaml build
-docker compose -f airflow/docker-compose.yaml run --rm airflow-init
-docker compose -f airflow/docker-compose.yaml up -d
-docker compose -f airflow/docker-compose.yaml ps
+docker compose --env-file .env -f airflow/docker-compose.yaml build
+docker compose --env-file .env -f airflow/docker-compose.yaml run --rm airflow-init
+docker compose --env-file .env -f airflow/docker-compose.yaml up -d
+docker compose --env-file .env -f airflow/docker-compose.yaml ps
 ```
 
 Open `http://localhost:8081` and sign in with the credentials configured for your local environment. Verify that the project DAG appears in the UI before triggering it.
@@ -63,15 +65,15 @@ The scheduled DAG runs monthly on the 10th at 14:00 Europe/Berlin (`catchup=Fals
 To inspect logs:
 
 ```powershell
-docker compose -f airflow/docker-compose.yaml logs --tail=100 airflow-scheduler
-docker compose -f airflow/docker-compose.yaml logs --tail=100 airflow-dag-processor
-docker compose -f airflow/docker-compose.yaml logs --tail=100 airflow-apiserver
+docker compose --env-file .env -f airflow/docker-compose.yaml logs --tail=100 airflow-scheduler
+docker compose --env-file .env -f airflow/docker-compose.yaml logs --tail=100 airflow-dag-processor
+docker compose --env-file .env -f airflow/docker-compose.yaml logs --tail=100 airflow-apiserver
 ```
 
 Stop services without deleting the PostgreSQL volume:
 
 ```powershell
-docker compose -f airflow/docker-compose.yaml down
+docker compose --env-file .env -f airflow/docker-compose.yaml down
 ```
 
 Avoid `down -v` unless you intentionally want to delete the local Airflow metadata database.
@@ -112,7 +114,7 @@ After a run, verify that all six Airflow tasks succeeded, especially `validate_p
 
 The checked-in Bronze profile CSV is a historical initial sample (20 core countries / 12 capacity countries), not a current coverage check. The publisher prepares and validates all four reporting marts before updating any final Glue table. A successful first integration run (2026-10-14) yielded 38, 38, 38 and 10 rows; Athena independently confirmed these counts. The project covers 41 markets overall, but comparison-year completeness and capacity-source coverage limit the reporting result sets.
 
-For unchanged reporting SQL and result rows, the fingerprint stored on each final Glue table causes the publisher to skip a new snapshot. If any final Glue update fails, the publisher attempts to restore the previous table definitions for all touched marts in reverse order. Inspect the exception, the rollback results and the four current Glue locations before retrying. On a clean retry, unchanged marts are skipped based on fingerprints. Do not run concurrent publishers. Prepared or failed snapshots may remain unreferenced; do not delete them without confirming they are not referenced by Glue. If the Compose SQL mount was added after container creation, recreate Airflow services with `docker compose -f airflow/docker-compose.yaml up -d --force-recreate airflow-apiserver airflow-scheduler airflow-dag-processor` (without `down -v`).
+For unchanged reporting SQL and result rows, the fingerprint stored on each final Glue table causes the publisher to skip a new snapshot. If any final Glue update fails, the publisher attempts to restore the previous table definitions for all touched marts in reverse order. Inspect the exception, the rollback results and the four current Glue locations before retrying. On a clean retry, unchanged marts are skipped based on fingerprints. Do not run concurrent publishers. Prepared or failed snapshots may remain unreferenced; do not delete them without confirming they are not referenced by Glue. If the Compose SQL mount was added after container creation, recreate Airflow services with `docker compose --env-file .env -f airflow/docker-compose.yaml up -d --force-recreate airflow-apiserver airflow-scheduler airflow-dag-processor` (without `down -v`).
 
 ## 6. Troubleshooting and recovery
 
