@@ -74,6 +74,8 @@ tfplan.json
 
 # Terraform saved execution plans
 *.tfplan
+**/tfplan
+**/tfplan.*
 
 
 
