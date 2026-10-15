@@ -117,7 +117,8 @@ The **Core Gold ERD above remains the authoritative dimensional model**. The fou
 flowchart TB
     subgraph CORE["Core Gold · dimensional model"]
         C["dim_country · dim_date"]
-        E["dim_energy_series · dim_capacity_series"]
+        E["dim_energy_series"]
+        CS["dim_capacity_series"]
         G["fact_generation"]
         D["fact_demand"]
         M["fact_emissions"]
