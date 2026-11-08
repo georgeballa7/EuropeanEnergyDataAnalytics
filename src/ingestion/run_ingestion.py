@@ -77,7 +77,6 @@ def run_ingestion() -> None:
     state = IngestionState(
         bucket_name=config["project"]["bucket"],
         region_name=config["project"]["region"],
-        profile_name=config["aws"].get("profile_name"),
     )
 
     checked = 0
