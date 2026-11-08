@@ -324,7 +324,7 @@ def update_gold_tables(glue_client) -> None:
                 f"Core Gold table '{table_name}' must be published before catalog sync"
             ) from exc
         location = previous["StorageDescriptor"]["Location"]
-        if f"/gold/{table_name}/snapshots/" not in location:
+        if f"/gold_snapshots/{table_name}/" not in location:
             raise ValueError(
                 f"Core Gold table '{table_name}' does not reference a versioned snapshot: {location}"
             )
