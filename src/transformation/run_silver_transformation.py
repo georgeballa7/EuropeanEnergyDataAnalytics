@@ -25,14 +25,12 @@ import json
 import boto3
 import pandas as pd
 
-from config.settings import load_config
+from config.settings import get_aws_settings, load_config
 from src.quality.data_quality import validate_dataset
 from src.transformation.clean_energy_data import clean_energy_data
 from src.transformation.silver_writer import write_silver_to_s3
 
-BUCKET_NAME = "european-energy-data-analytics-488658242500-eu-central-1-an"
-AWS_PROFILE = "energy-pipeline"
-REGION_NAME = "eu-central-1"
+BUCKET_NAME, REGION_NAME = get_aws_settings()
 DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
 BUSINESS_KEYS = {
     "generation": ["entity_code", "date", "series"],
@@ -45,13 +43,11 @@ BUSINESS_KEYS = {
 
 def get_s3_client():
     """
-    Erzeuge einen S3-Client mit dem lokalen AWS-Profil des Projekts.
+    Erzeuge einen S3-Client über die boto3-Credential-Provider-Chain.
 
-    Das benannte Profil ist für die lokale Entwicklung vorgesehen. In einer
-    produktiven AWS-Umgebung sollten IAM Roles und temporäre Credentials
-    bevorzugt werden.
+    AWS_PROFILE kann lokal gesetzt werden; in AWS werden IAM-Rollen genutzt.
     """
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=REGION_NAME)
+    session = boto3.Session(region_name=REGION_NAME)
     return session.client("s3")
 
 
@@ -191,7 +187,6 @@ def process_dataset(s3_client, dataset_name: str) -> None:
         df=silver_df,
         dataset_name=dataset_name,
         bucket_name=BUCKET_NAME,
-        aws_profile=AWS_PROFILE,
         region_name=REGION_NAME,
     )
     print(f"Abgeschlossen: {dataset_name} -> {s3_uri}")
