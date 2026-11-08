@@ -23,6 +23,16 @@ def test_sql_loader_reads_registered_queries(name):
     assert not sql.endswith(";")
 
 
+def test_default_sql_location_works_outside_airflow():
+    """The actual publishing call uses the default path on Windows and in Docker."""
+    from src.analytics.mart_config import ANALYTICS_SQL_DIRECTORY
+
+    assert ANALYTICS_SQL_DIRECTORY.is_dir()
+    assert ANALYTICS_SQL_DIRECTORY == Path(__file__).resolve().parents[1] / "sql" / "analytics"
+    for name in REPORTING_MARTS:
+        assert load_mart_sql(name) == load_mart_sql(name, ANALYTICS_SQL_DIRECTORY)
+
+
 def test_unregistered_mart_rejected():
     with pytest.raises(ValueError, match="Unknown analytics mart"):
         load_mart_sql("../../secrets")
