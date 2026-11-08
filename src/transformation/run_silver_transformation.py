@@ -122,6 +122,21 @@ def load_bronze_dataframes(
     return dataframes
 
 
+def get_latest_silver_key(s3_client, dataset_name: str) -> str | None:
+    """Ermittle den jüngsten Silver-Snapshot über alle S3-Listenseiten."""
+    prefix = f"silver/ember/{dataset_name}/"
+    return latest_object_key(s3_client, BUCKET_NAME, prefix, ".parquet")
+
+
+def load_latest_silver_dataframe(s3_client, dataset_name: str) -> pd.DataFrame | None:
+    """Lade den aktuellen Silver-Snapshot, sofern bereits einer existiert."""
+    key = get_latest_silver_key(s3_client, dataset_name)
+    if key is None:
+        return None
+    response = s3_client.get_object(Bucket=BUCKET_NAME, Key=key)
+    return pd.read_parquet(io.BytesIO(response["Body"].read()), engine="pyarrow")
+
+
 def merge_silver_snapshot(
     current_silver_df: pd.DataFrame | None,
     new_silver_df: pd.DataFrame,
