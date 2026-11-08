@@ -72,7 +72,6 @@ def run_ingestion() -> None:
     writer = S3Writer(
         bucket_name=config["project"]["bucket"],
         region_name=config["project"]["region"],
-        profile_name=config["aws"].get("profile_name"),
         bronze_prefix=config["storage"]["bronze_prefix"],
     )
     state = IngestionState(
