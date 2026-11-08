@@ -89,10 +89,10 @@ def test_all_nine_snapshots_staged_before_glue_changes(monkeypatch):
     assert len(results) == 9
     assert [e[0] for e in events[:9]] == ["s3"] * 9
     assert [e[0] for e in events[9:]] == ["update"] * 9
-    assert all("/snapshots/run001/" in uri for uri in results)
+    assert all("/gold_snapshots/" in uri for uri in results)
     for name, item in glue.tables.items():
         assert item["StorageDescriptor"]["Location"] == (
-            f"s3://{gold.BUCKET_NAME}/gold/{name}/snapshots/run001/"
+            f"s3://{gold.BUCKET_NAME}/gold_snapshots/{name}/run001/"
         )
 
 
