@@ -75,7 +75,7 @@ def load_all_silver_datasets(s3_client) -> dict[str, pd.DataFrame]:
 
 def build_gold_s3_key(table_name: str, snapshot_id: str) -> str:
     """Versionierten, unveränderlichen Key einer Gold-Tabelle erzeugen."""
-    return f"gold/{table_name}/snapshots/{snapshot_id}/{table_name}.parquet"
+    return f"gold_snapshots/{table_name}/{snapshot_id}/{table_name}.parquet"
 
 
 def write_gold_table(
@@ -153,7 +153,7 @@ def write_gold_model(
         for table_name in GOLD_TABLE_SCHEMAS
     }
 
-    # Stage every table before publishing the first Glue definition.
+    # Stage OUTSIDE the legacy gold/<table>/ locations: Glue may still scan\n    # those old prefixes until every table has been repointed.\n    # Stage every table before publishing the first Glue definition.
     staged = {}
     for table_name, df in gold_datasets.items():
         staged[table_name] = write_gold_table(
@@ -164,7 +164,7 @@ def write_gold_model(
         for table_name in GOLD_TABLE_SCHEMAS:
             input_definition = build_table_input(
                 table_name, GOLD_TABLE_SCHEMAS[table_name],
-                f"s3://{BUCKET_NAME}/gold/{table_name}/snapshots/{snapshot_id}/",
+                f"s3://{BUCKET_NAME}/gold_snapshots/{table_name}/{snapshot_id}/",
             )
             input_definition["Parameters"]["core_gold_snapshot_id"] = snapshot_id
             touched.append(table_name)  # include failing operation in rollback
