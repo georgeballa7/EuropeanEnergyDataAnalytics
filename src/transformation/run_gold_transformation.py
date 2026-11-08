@@ -22,6 +22,7 @@ from config.settings import get_aws_settings
 from src.quality.gold_quality import validate_gold_model
 from src.transformation.build_gold_model import build_gold_model
 from src.transformation.silver_writer import dataframe_to_parquet_bytes
+from src.utils.s3_listing import latest_object_key
 
 BUCKET_NAME, REGION_NAME = get_aws_settings()
 SILVER_DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
@@ -38,15 +39,12 @@ def get_s3_client():
 def get_latest_silver_key(s3_client, dataset_name: str) -> str:
     """Ermittle das zuletzt geschriebene Silver-Parquet-Objekt."""
     prefix = f"silver/ember/{dataset_name}/"
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    objects = [
-        obj for obj in response.get("Contents", []) if obj["Key"].endswith(".parquet")
-    ]
-    if not objects:
+    key = latest_object_key(s3_client, BUCKET_NAME, prefix, ".parquet")
+    if key is None:
         raise FileNotFoundError(
             f"Keine Silver-Parquet-Datei für den Datensatz '{dataset_name}' gefunden."
         )
-    return max(objects, key=lambda obj: obj["LastModified"])["Key"]
+    return key
 
 
 def load_silver_dataset(s3_client, dataset_name: str) -> pd.DataFrame:
