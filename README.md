@@ -143,5 +143,6 @@ The interactive report contains an introduction, executive overview, dedicated p
 - [Architecture Decisions](docs/decisions/architecture_decisions.md)
 - [Silver Data Quality Guidelines](docs/decisions/silver_data_quality_guidelines.md)
 - [Operations Runbook](docs/operations/runbook.md)
+- [Phase B: controlled first-run and rollback playbook](docs/operations/phase_b_first_run.md)
 
 Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The [EDA notebook](notebooks/03_eda.ipynb) reads consolidated historical Silver Parquet snapshots for exploration; it does not replace the incremental Bronze/Silver/Gold pipeline.
