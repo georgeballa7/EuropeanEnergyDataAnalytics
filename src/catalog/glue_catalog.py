@@ -32,14 +32,12 @@ from __future__ import annotations
 
 import boto3
 
+from config.settings import get_aws_settings
+
 
 DATABASE_NAME = "european_energy_analytics"
 
-BUCKET_NAME = (
-    "european-energy-data-analytics-488658242500-eu-central-1-an"
-)
-
-REGION_NAME = "eu-central-1"
+BUCKET_NAME, REGION_NAME = get_aws_settings()
 
 
 # ---------------------------------------------------------------------
@@ -345,6 +343,4 @@ def update_glue_catalog(
 
 
 if __name__ == "__main__":
-    update_glue_catalog(
-        aws_profile="energy-pipeline"
-    )
+    update_glue_catalog()
