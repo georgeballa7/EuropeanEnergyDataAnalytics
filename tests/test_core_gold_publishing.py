@@ -152,3 +152,11 @@ def test_new_environment_can_publish_missing_tables(monkeypatch):
     gold.write_gold_model(s3, tables_data(), glue_client=glue, snapshot_id="run005")
     assert len(glue.tables) == 9
     assert len([x for x in glue.events if x[0] == "create"]) == 9
+
+
+def test_versioned_gold_paths_are_outside_legacy_table_prefixes():
+    """The old Athena/Glue location must not discover staged snapshots."""
+    for name in glue_catalog.GOLD_TABLE_SCHEMAS:
+        new_key = gold.build_gold_s3_key(name, "run006")
+        assert new_key.startswith(f"gold_snapshots/{name}/run006/")
+        assert not new_key.startswith(f"gold/{name}/")
