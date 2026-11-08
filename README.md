@@ -76,7 +76,7 @@ Configure the `energy-pipeline` AWS CLI profile and verify the target identity b
 aws sts get-caller-identity --profile energy-pipeline
 ```
 
-For direct local Python runs, set `$env:AWS_PROFILE = "energy-pipeline"` in PowerShell. The Silver and Gold transformations and Glue Catalog read their S3 bucket and region from `config/series_config.yaml` and use boto3's standard credential chain; they do not force a local profile. Docker Compose already supplies `AWS_PROFILE` for local Airflow. Bronze ingestion/backfill still read the optional profile from the YAML configuration; unifying that path is a separate Phase B follow-up.
+For direct local Python runs, set `$env:AWS_PROFILE = "energy-pipeline"` in PowerShell. The Silver and Gold transformations and Glue Catalog read their S3 bucket and region from `config/series_config.yaml` and use boto3's standard credential chain; they do not force a local profile. Docker Compose already supplies `AWS_PROFILE` for local Airflow. Bronze ingestion/backfill also use boto3's credential chain; no project-specific profile is forced in YAML.
 
 ### Run Airflow
 
