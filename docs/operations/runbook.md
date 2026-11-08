@@ -100,15 +100,23 @@ For a separate deployment, first parameterize and review the backend, account-sp
 The documented data flow is:
 
 1. Ember API ingestion → append-only S3 Bronze JSON.
-2. Cleaning, merge and validation → S3 Silver Parquet snapshots.
-3. Dimensional transformations and integrity checks → S3 Gold Parquet snapshots.
-4. Explicit Glue catalog registration for Silver and Gold tables.
+2. Cleaning, merge and validation → S3 Silver Parquet snapshot; a post-write checkpoint records processed Bronze objects and the Silver ETag.
+3. Dimensional transformations, integrity checks and versioned Core Gold Parquet snapshots → controlled Glue publication with best-effort rollback.
+4. Silver Glue schema synchronization; Core Gold registrations retain the published snapshot locations.
 5. Athena post-load validation of all nine Core Gold tables.
 6. Analytics Gold publication of four additional Parquet reporting marts and Glue tables. Existing Power BI Import reporting can use the unchanged Core Gold model; the four additive Analytics Gold tables are available separately for reporting.
 
 Before a manual run, check the intended Ember dataset/country scope (**41 markets** for the four core monthly datasets; **13 configured markets** for capacity), the **2010-01** configured historical request start and the existing S3 incremental ingestion state. Actual historical availability is dataset-specific. Historical backfills are **separate maintenance operations** and should not be substituted for regular incremental ingestion.
 
 After a run, verify that all six Airflow tasks succeeded, especially `validate_persisted_gold` and `publish_analytics_gold`. Check expected new Bronze objects, updated Silver/Gold snapshots, Glue table metadata and Athena validation results. The final task queries the existing `european-energy-analytics` workgroup and fails on empty Gold tables, null required fields, duplicate keys, invalid foreign keys, Athena errors or timeouts. Compare counts, country coverage and source periods with the project's [data-quality rules](../data_quality.md). A successful Airflow run alone does not prove analytical correctness.
+
+### Phase B: Silver checkpoint and Core Gold publication
+
+Silver now lists all Bronze object metadata but reads and cleans **only new** JSON objects when the `control/silver/<dataset>.json` manifest matches the live Silver snapshot ETag. The manifest is written **after** the validated Parquet snapshot is stored. A missing, stale or invalid manifest, a replaced Bronze object or a removed Bronze object triggers a complete deterministic rebuild from Bronze. New historical backfill objects are recognized even though they do not update the ingestion state. If Silver writing or manifest writing fails, retry the Silver task; never manually advance the manifest. Do not modify Bronze or Silver objects while processing.
+
+Core Gold first validates the full nine-table in-memory model, writes **all nine** Parquet files under unique `gold/<table>/snapshots/<run-id>/` prefixes, then updates the nine Glue table locations. If S3 staging fails, previously published tables stay unchanged. If a Glue update fails, the publisher attempts to restore every affected table definition in reverse order. **Glue changes across tables are not atomic**: consumers may briefly see a mixture during publication, and rollback itself can fail. Inspect the failed task, each Glue table location, and the rollback error before retrying. Old and incomplete snapshots are deliberately retained for diagnosis and recovery; do not delete them without proving that no Glue table references them. S3 bucket versioning is not a replacement for this staged publication process.
+
+The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid running standalone Silver or Gold publishers concurrently with the DAG. Unit tests and CI mock AWS. The first real run after merging requires an explicitly reviewed validation plan, AWS identity verification and cost awareness; no live AWS publish was performed by the PR.
 
 ### Analytics Gold publication and retry behavior
 
@@ -125,6 +133,8 @@ For unchanged reporting SQL and result rows, the fingerprint stored on each fina
 | AWS `AccessDenied` | `aws sts get-caller-identity --profile energy-pipeline`; IAM scope | Correct the intended identity or least-privilege policy; do not switch to administrator credentials as a workaround |
 | Ember API failure | API key, HTTP response, rate limits and request scope | Retry only after identifying the cause; avoid duplicate backfill loads |
 | Data-quality failure | Failed task logs, input schema, keys and source coverage | Correct source/configuration or transformation; do not bypass validations |
+| Silver checkpoint inconsistency | `control/silver/<dataset>.json`, Bronze keys/ETags, Silver ETag | Allow complete Bronze rebuild; do not manually advance manifest |
+| Core Gold publication failed | Snapshot staging logs, nine Glue table locations and rollback report | Verify restoration to old snapshots before retrying; never delete referenced snapshots |
 | Terraform drift or planned replacement | Plan output, variable values, remote-state ownership and resource taint | Stop; investigate before any apply or state manipulation |
 | Analytics Gold failure | Confirm SQL volume is mounted at `/opt/airflow/project/sql/analytics/`, Athena query status, Glue `string` column types and staging table cleanup | Correct the cause and rerun; completed marts with identical fingerprints are skipped. Do not delete Glue-referenced snapshots |
 | Athena failure | Workgroup, Glue table schema, S3 paths, query permissions and results location | Inspect `validate_persisted_gold` logs and query execution details; check CloudWatch/SNS where applicable |
