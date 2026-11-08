@@ -47,7 +47,7 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - Power BI reporting over the existing nine-table Core Gold model through Athena
 - Four additive Analytics Gold reporting marts, prepared and validated before Glue publication, with unchanged-result detection and best-effort rollback
 - Bronze→Silver incremental checkpoints tied to the persisted Silver snapshot ETag; full rebuild on manifest/source mismatch
-- Versioned Core Gold Parquet snapshots for nine tables; Glue publication occurs after all snapshots have been staged, with best-effort rollback
+- Versioned Core Gold Parquet snapshots for nine tables under a separate `gold_snapshots/` root, outside legacy `gold/<table>/` prefixes; Glue publication follows staging, with best-effort rollback
 - S3 listing pagination beyond 1,000 objects and serialized Airflow DAG runs to avoid overlapping publications
 
 ## Infrastructure, CI/CD and Monitoring
