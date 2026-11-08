@@ -73,7 +73,12 @@ $Region = python -c "from config.settings import get_aws_settings; print(get_aws
 aws sts get-caller-identity --profile $env:AWS_PROFILE
 aws configure get region --profile $env:AWS_PROFILE
 
-$Stamp = Get-Date -Format "yyyyMMddTHHmmss"
+$ExpectedAccount = aws sts get-caller-identity --profile $env:AWS_PROFILE --query Account --output text
+if ($LASTEXITCODE -ne 0 -or -not $Bucket.Contains($ExpectedAccount) -or $Region -ne "eu-central-1") {
+    throw "STOP: AWS identity, bucket, or region mismatch"
+}
+
+$Stamp = (Get-Date -Format "yyyyMMddTHHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0,8)
 $BackupPrefix = "backups/pre-phase-b/$Stamp"
 $BackupDir = Join-Path $HOME "phase-b-baseline-$Stamp"
 New-Item -Path (Join-Path $BackupDir "glue") -ItemType Directory -Force | Out-Null
@@ -82,9 +87,12 @@ $Silver = @("generation","demand","emissions","carbon_intensity","capacity")
 foreach ($Dataset in $Silver) {
     $SourceKey = "silver/ember/$Dataset/$Dataset.parquet"
     $BackupKey = "$BackupPrefix/silver/$Dataset.parquet"
-    aws s3api head-object --bucket $Bucket --key $SourceKey --region $Region
+    $SourceSize = aws s3api head-object --bucket $Bucket --key $SourceKey --region $Region --query ContentLength --output text
+    if ($LASTEXITCODE -ne 0) { throw "STOP: original Silver object not readable: $Dataset" }
     aws s3api copy-object --bucket $Bucket --copy-source "$Bucket/$SourceKey" --key $BackupKey --region $Region
-    aws s3api head-object --bucket $Bucket --key $BackupKey --region $Region
+    if ($LASTEXITCODE -ne 0) { throw "STOP: Silver backup copy failed: $Dataset" }
+    $BackupSize = aws s3api head-object --bucket $Bucket --key $BackupKey --region $Region --query ContentLength --output text
+    if ($LASTEXITCODE -ne 0 -or $BackupSize -ne $SourceSize) { throw "STOP: Silver backup verification failed: $Dataset" }
 }
 
 $Core = @(
