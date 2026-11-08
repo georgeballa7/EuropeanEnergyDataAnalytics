@@ -29,6 +29,7 @@ from config.settings import get_aws_settings, load_config
 from src.quality.data_quality import validate_dataset
 from src.transformation.clean_energy_data import clean_energy_data
 from src.transformation.silver_writer import write_silver_to_s3
+from src.utils.s3_listing import latest_object_key
 
 BUCKET_NAME, REGION_NAME = get_aws_settings()
 DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
@@ -118,13 +119,7 @@ def load_bronze_dataframes(s3_client, dataset_name: str) -> list[pd.DataFrame]:
 def get_latest_silver_key(s3_client, dataset_name: str) -> str | None:
     """Ermittle den neuesten vorhandenen Silver-Snapshot eines Datensatzes."""
     prefix = f"silver/ember/{dataset_name}/"
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    parquet_objects = [
-        obj for obj in response.get("Contents", []) if obj["Key"].endswith(".parquet")
-    ]
-    if not parquet_objects:
-        return None
-    return max(parquet_objects, key=lambda obj: obj["LastModified"])["Key"]
+    return latest_object_key(s3_client, BUCKET_NAME, prefix, ".parquet")
 
 
 def load_latest_silver_dataframe(s3_client, dataset_name: str) -> pd.DataFrame | None:
