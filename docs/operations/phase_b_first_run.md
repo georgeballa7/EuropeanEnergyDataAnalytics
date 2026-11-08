@@ -42,7 +42,7 @@ new code has been exercised against AWS. Reconfirm it before any rollout.
 3. Verify AWS account and region **before every write session**.
    Local `AWS_PROFILE=energy-pipeline` must resolve to the intended principal.
 4. Record a complete baseline of the 9 Core Gold Glue table definitions
-   and locations, plus the 5 Silver Glue table definitions. Retain
+   and locations, the 5 Silver Glue tables and all 4 Analytics Gold Glue tables. Retain
    baseline Athena counts/quality results if an approved query budget exists.
 5. **Back up and verify all five existing Silver Parquet objects** under a
    timestamped, separate S3 backup prefix. Since bucket versioning is absent,
@@ -75,7 +75,7 @@ aws configure get region --profile $env:AWS_PROFILE
 
 $Stamp = Get-Date -Format "yyyyMMddTHHmmss"
 $BackupPrefix = "backups/pre-phase-b/$Stamp"
-$BackupDir = Join-Path (Get-Location) "phase-b-baseline-$Stamp"
+$BackupDir = Join-Path $HOME "phase-b-baseline-$Stamp"
 New-Item -Path (Join-Path $BackupDir "glue") -ItemType Directory -Force | Out-Null
 
 $Silver = @("generation","demand","emissions","carbon_intensity","capacity")
@@ -92,7 +92,11 @@ $Core = @(
  "fact_generation","fact_emissions","fact_demand",
  "fact_carbon_intensity","fact_capacity"
 )
-foreach ($Table in ($Silver + $Core)) {
+$Analytics = @(
+ "analytics_generation_demand_summary","analytics_energy_mix_transition_summary",
+ "analytics_emissions_carbon_intensity","analytics_installed_solar_wind_capacity"
+)
+foreach ($Table in ($Silver + $Core + $Analytics)) {
     aws glue get-table --database-name "european_energy_analytics" --name $Table --region $Region |
        Out-File -FilePath (Join-Path $BackupDir "glue/$Table.json") -Encoding utf8
 }
@@ -100,7 +104,7 @@ foreach ($Table in ($Silver + $Core)) {
 
 **Before declaring backup complete:** inspect failures and explicitly
 compare the five source-versus-backup object sizes, and confirm all
-14 Glue JSON files are nonempty and represent the expected database.
+18 Glue JSON files are nonempty and represent the expected database.
 Capture original Glue locations separately. For a future rollback,
 Glue's `GetTable` response must be converted to a valid `TableInput`;
 do **not** blindly submit the original JSON to `UpdateTable`.
