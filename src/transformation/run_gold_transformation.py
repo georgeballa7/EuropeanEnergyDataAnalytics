@@ -18,21 +18,20 @@ from pathlib import Path
 import boto3
 import pandas as pd
 
+from config.settings import get_aws_settings
 from src.quality.gold_quality import validate_gold_model
 from src.transformation.build_gold_model import build_gold_model
 from src.transformation.silver_writer import dataframe_to_parquet_bytes
 
-BUCKET_NAME = "european-energy-data-analytics-488658242500-eu-central-1-an"
-AWS_PROFILE = "energy-pipeline"
-REGION_NAME = "eu-central-1"
+BUCKET_NAME, REGION_NAME = get_aws_settings()
 SILVER_DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SERIES_CONFIG_PATH = PROJECT_ROOT / "config" / "series_config.yaml"
 
 
 def get_s3_client():
-    """Erzeuge einen S3-Client mit dem lokalen AWS-Profil des Projekts."""
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=REGION_NAME)
+    """Erzeuge einen S3-Client über die boto3-Credential-Provider-Chain."""
+    session = boto3.Session(region_name=REGION_NAME)
     return session.client("s3")
 
 
