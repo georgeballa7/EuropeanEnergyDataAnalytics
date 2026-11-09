@@ -107,30 +107,6 @@ Infrastructure changes require explicit review; CI validates and guards Terrafor
 
 For complete setup requirements, troubleshooting, safe recovery procedures and the reproducibility checklist, see the **[Local Setup and Operations Runbook](docs/operations/runbook.md)**.
 
-## Phase B: Verified AWS Integration
-
-On **2026-11-09**, the feature-branch Silver and Core Gold transformations
-were executed directly against the project AWS environment. All **five
-Silver manifests** matched their 19 Bronze inputs and published Silver
-ETags; all **nine Core Gold** snapshot files and Glue locations were
-verified, and **9/9 Athena Core Gold quality queries passed**. All four
-existing Analytics Gold tables were independently queried in Athena
-(38/38/38/10 rows). The analytics publisher correctly skipped each
-unchanged-result mart rather than generating an unnecessary snapshot.
-
-The current release verification also covers an actual Windows-local
-execution of the SQL loader after removal of an Airflow-only absolute
-path. **Full manual Airflow end-to-end run PASSED on 2026-11-09:** all six
-DAG tasks succeeded, including Bronze ingestion, Silver, Core Gold, Glue,
-Athena validation and Analytics Gold. Independent AWS checks confirmed a
-new nine-table Core Gold snapshot and a genuinely new Parquet snapshot
-published for the energy-mix Analytics mart. Still untested: deliberately
-injected rollback/failure notification and unattended scheduler operation.
-No Terraform Apply was performed.
-
-Read the [Phase B integration evidence and outstanding checks](docs/operations/phase_b_validation_2026_11_09.md)
-and the [first-run / rollback checklist](docs/operations/phase_b_first_run.md).
-
 ## Data Coverage
 
 The project configures **41 European markets** for electricity generation, demand, power-sector emissions and carbon intensity. Installed capacity has its own **13-market** Ember-supported ingestion scope. These are configured request scopes, not guarantees that each market has observations in every period. The source request starts at **2010-01**; actual availability varies by dataset and country.
@@ -168,6 +144,5 @@ The interactive report contains an introduction, executive overview, dedicated p
 - [Silver Data Quality Guidelines](docs/decisions/silver_data_quality_guidelines.md)
 - [Operations Runbook](docs/operations/runbook.md)
 - [Phase B: controlled first-run and rollback playbook](docs/operations/phase_b_first_run.md)
-- [Phase B: verified AWS integration record (2026-11-09)](docs/operations/phase_b_validation_2026_11_09.md)
 
 Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The [EDA notebook](notebooks/03_eda.ipynb) reads consolidated historical Silver Parquet snapshots for exploration; it does not replace the incremental Bronze/Silver/Gold pipeline.

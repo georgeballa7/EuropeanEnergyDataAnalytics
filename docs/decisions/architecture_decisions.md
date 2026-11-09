@@ -65,9 +65,3 @@ using an Airflow-container-only absolute path. This allows the same code
 to run in local Windows Python and in Docker/Airflow and prevents the
 first manual Phase B runtime failure from recurring.
 
-## Phase B release-validation boundary
-
-The real AWS manual Silver and Core Gold writes, Glue publication, nine
-Athena Core Gold quality checks and four existing Analytics Gold table
-queries passed on 2026-11-09. A subsequent manually triggered six-task Airflow DAG also passed on 2026-11-09, and newly published the changed-result energy-mix Analytics Gold snapshot. A scheduled unattended run, deliberately injected rollback failure and Slack failure notification remain untested. See the
-[validation record](../operations/phase_b_validation_2026_11_09.md).

@@ -116,35 +116,13 @@ Silver now lists all Bronze object metadata but reads and cleans **only new** JS
 
 Core Gold first validates the full nine-table in-memory model, writes **all nine** Parquet files under unique `gold_snapshots/<table>/<run-id>/` prefixes, outside the legacy `gold/<table>/` prefixes, then updates the nine Glue table locations. If S3 staging fails, previously published tables stay unchanged. If a Glue update fails, the publisher attempts to restore every affected table definition in reverse order. **Glue changes across tables are not atomic**: consumers may briefly see a mixture during publication, and rollback itself can fail. Inspect the failed task, each Glue table location, and the rollback error before retrying. Legacy Core Gold tables continue reading from `gold/<table>/` until their Glue location switches, so staging cannot accidentally mix old and new Parquet files. Old and incomplete snapshots are deliberately retained for diagnosis and recovery; do not delete them without proving that no Glue table references them. S3 bucket versioning is not a replacement for this staged publication process.
 
-The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid running standalone Silver or Gold publishers concurrently with the DAG. Unit tests and CI mock AWS. **Both direct feature-branch AWS integration and the full six-task manually triggered Airflow DAG completed successfully on 2026-11-09**, with independent S3/Glue/Analytics publication verification; see the [integration record](phase_b_validation_2026_11_09.md). Unattended scheduling and intentionally triggered alert/rollback scenarios have not been validated.
+The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid running standalone Silver or Gold publishers concurrently with the DAG. Unit tests and CI mock AWS. Execution records and outstanding operational checks are maintained in the project notes in Notion.
 
 ### Analytics Gold publication and retry behavior
 
 The checked-in Bronze profile CSV is a historical initial sample (20 core countries / 12 capacity countries), not a current coverage check. The publisher prepares and validates all four reporting marts before updating any final Glue table. The initial reporting validation on 2026-10-14 yielded 38, 38, 38 and 10 rows; Athena independently reconfirmed those counts on **2026-11-09**. On the November validation, all four Analytics marts returned `skipped=True` because data-derived fingerprints were unchanged; a changed-result republish was not live-tested. The project covers 41 markets overall, but comparison-year completeness and capacity-source coverage limit the reporting result sets.
 
 For unchanged reporting SQL and result rows, the fingerprint stored on each final Glue table causes the publisher to skip a new snapshot. If any final Glue update fails, the publisher attempts to restore the previous table definitions for all touched marts in reverse order. Inspect the exception, the rollback results and the four current Glue locations before retrying. On a clean retry, unchanged marts are skipped based on fingerprints. Do not run concurrent publishers. Prepared or failed snapshots may remain unreferenced; do not delete them without confirming they are not referenced by Glue. If the Compose SQL mount was added after container creation, recreate Airflow services with `docker compose --env-file .env -f airflow/docker-compose.yaml up -d --force-recreate airflow-apiserver airflow-scheduler airflow-dag-processor` (without `down -v`).
-
-### Verified feature-branch rollout (2026-11-09)
-
-A controlled manual rollout from PR #14 is complete: all five Silver
-checkpoints were inspected (19 Bronze source objects), nine Core Gold
-versioned snapshots were published, and all nine Athena Core Gold quality
-queries passed. The four existing Analytics Gold tables remained at their
-valid previously published snapshots; fingerprint checks correctly
-returned `skipped=True`, and four live Athena count queries returned
-38, 38, 38 and 10 rows.
-
-Before any Silver write, five original Silver Parquet files and all
-18 Glue table definitions were backed up under
-`backups/pre-phase-b/20261108T223846Z-b91ad8ee8b5b/` in the project
-S3 bucket. The **application data bucket does not have versioning enabled**;
-do not confuse it with the separate versioned Terraform state bucket.
-Never delete these backups or the legacy Gold objects without an
-explicit retention and restore decision.
-
-**Follow-up after the same-day controlled manual Airflow E2E run:** all six tasks passed, a new nine-table Core Gold snapshot was published, and the energy-mix Analytics mart's changed-result UNLOAD/snapshot/Glue path was exercised. **Still not deliberately exercised:** scheduler-triggered unattended run, injected failure/rollback, or end-to-end Slack alerting.
-The precise results and commands are in the
-[Phase B AWS validation record](phase_b_validation_2026_11_09.md).
 
 ## 6. Troubleshooting and recovery
 
@@ -185,4 +163,4 @@ A successful deployment or configuration check is not equivalent to a tested not
 - [ ] Terraform validation passes without changing infrastructure.
 - [ ] No credentials, state files or saved plans are committed.
 
-See [architecture](../architecture/architecture.md), [architecture decisions](../decisions/architecture_decisions.md), [data quality](../data_quality.md), and the [Phase B AWS integration record](phase_b_validation_2026_11_09.md) for design and verified release evidence.
+See [architecture](../architecture/architecture.md), [architecture decisions](../decisions/architecture_decisions.md), [data quality](../data_quality.md), and the the project validation notes in Notion for design and verified release evidence.

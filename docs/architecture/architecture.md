@@ -85,20 +85,6 @@ The DAG contains six sequential tasks: Bronze ingestion, Silver transformation a
 
 The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False` and `max_active_runs=1` to avoid overlapping DAG publications. Standalone scripts must not run concurrently with the DAG. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
 
-## Verified Phase B integration (2026-11-09)
-
-A controlled **manual** run of the actual feature-branch Silver and Core Gold
-transformations passed against the existing AWS resources. All five Silver
-manifests matched their Bronze metadata and snapshot ETags; all nine Core
-Gold Glue tables pointed to the same new snapshot run; all nine Core Gold
-Athena quality queries passed. The four existing Analytics Gold marts were
-also queryable through Athena with the expected 38/38/38/10 rows, and their
-unchanged-result fingerprints correctly prevented redundant publication.
-
-After this manual stage-level verification, the **full Airflow DAG passed all six tasks** on 2026-11-09, including the Bronze ingestion task. AWS read-back confirmed a new shared nine-table Core Gold snapshot and a newly published energy-mix Analytics Gold Parquet snapshot and Glue pointer. Automated schedule triggers and deliberately induced rollback/alert paths remain separate tests.
-See the [detailed validation record](../operations/phase_b_validation_2026_11_09.md)
-for evidence and remaining operational checks.
-
 ## Infrastructure as Code
 
 Terraform configuration lives under [`infra/terraform/`](../../infra/terraform/). Existing AWS resources were imported where appropriate, while the dedicated Athena workgroup was provisioned directly through Terraform. The remote backend is separate from the analytics data bucket and uses S3 versioning, SSE-S3 encryption, public-access blocking and S3-native state locking.

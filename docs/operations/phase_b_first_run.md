@@ -3,7 +3,7 @@
 > **Historical first-run checklist — executed in controlled manual steps on 8–9 November 2026.**
 > The preflight baseline below describes the AWS state **before** Phase B;
 > it is no longer the current live state. The actual backup and integration
-> results are recorded in [Phase B AWS validation](phase_b_validation_2026_11_09.md).
+> results are recorded in the project validation notes in Notion.
 > This checklist remains a recovery / repeat-rollout reference. Do not
 > rerun its write commands against the same data without a fresh review.
 
@@ -187,7 +187,7 @@ This document captures the original first-run plan; **the documented manual
 AWS integration has since been executed**. The related S3 backups, Silver
 checkpoints, nine Core Gold snapshots, Glue updates, nine Athena Core Gold
 quality queries and four Analytics Gold verification queries are recorded in
-[the validation report](phase_b_validation_2026_11_09.md).
+the project validation notes in Notion.
 
 The application S3 bucket remains unversioned; only the *separate Terraform
 state bucket* is documented as versioned. No Terraform Apply or end-to-end Slack failure-notification test was performed. A full **manual Airflow DAG run** succeeded later on 9 November, including its Bronze ingestion task and a new Analytics Gold energy-mix snapshot; it did not prove an unattended scheduled trigger. Neither this markdown file nor its

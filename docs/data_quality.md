@@ -43,21 +43,6 @@ The published mart counts initially verified in Athena on 2026-10-14 and **indep
 
 For unchanged SQL and result data, a stored fingerprint prevents repeat publication. The publisher prepares and validates **all four** marts before changing final Glue tables, then updates those tables sequentially. If an update fails, it attempts **best-effort rollback** of every touched table. The previous Glue table definitions are retained for recovery, while prepared snapshots remain available for investigation.
 
-## Phase B Live Verification (2026-11-09)
-
-A controlled direct-stage AWS verification inspected all five version-1
-Silver manifests: each Silver snapshot key and ETag matched its manifest,
-and all 19 Bronze objects' keys, ETags and sizes matched the manifest
-source inventory. All nine versioned Core Gold Parquet objects existed,
-and all nine Glue table locations and snapshot IDs matched. Nine Athena
-post-load quality queries were **successful** and returned zero null
-required fields, invalid fact foreign keys or duplicate key groups.
-
-The live reporting-mart checks verified four existing Glue registrations,
-the unchanged-result fingerprint skip and Athena row counts (38/38/38/10).
-Later that day, the complete six-task manually triggered Airflow DAG succeeded. During this run the energy-mix Analytics Gold mart published a new Parquet snapshot and Glue location, confirming a live changed-result publication path. The automated scheduler trigger, deliberate rollback failure and Slack failure-notification path were not tested. See the
-[full validation record](operations/phase_b_validation_2026_11_09.md).
-
 ## Source-Aware Validation
 
 The project avoids generic cleaning rules that would alter valid source semantics. Statistical outliers are retained, missing observations are not imputed, negative net-import values are allowed, and aggregate-series metadata is preserved to support correct analytical aggregation.
