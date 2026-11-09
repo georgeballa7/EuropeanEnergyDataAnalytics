@@ -10,7 +10,7 @@ Bronze uses JSON to preserve the source response with minimal transformation. Si
 
 ## Incremental Bronze, Snapshot Silver and Gold
 
-Bronze is append-only and stores incremental source loads for traceability. Silver maintains one stable, complete cleaned snapshot per dataset. Gold maintains one stable validated analytical snapshot per dimension or fact table. This keeps downstream consumption simple while retaining raw ingestion history.
+Bronze is append-only and stores incremental source loads for traceability. Silver maintains one stable, complete cleaned snapshot per dataset and persists a manifest at `control/silver/<dataset>.json`; it can skip unchanged Bronze inputs or rebuild fully when the manifest/source inventory no longer matches. Core Gold uses **immutable, run-specific** Parquet snapshots in `gold_snapshots/<table>/<run-id>/`, while Glue tables expose one published version at a time. Unlike Silver's fixed object keys, Core Gold does not overwrite the last published snapshot. This keeps consumers on a consistent table location after publication while retaining previous files for recovery; the multi-table Glue switch is still not atomic.
 
 ## Explicit Historical Backfills
 
@@ -54,4 +54,22 @@ GitHub Actions assumes scoped AWS IAM roles through OIDC, avoiding long-lived AW
 
 ## Additive Analytics Gold reporting marts
 
-The nine-table Core Gold dimensional model remains the reusable analytical foundation. Four separate country-level Analytics Gold marts are published from version-controlled Athena SQL as validated Parquet snapshots, catalogued in Glue and consumed by Power BI. The reporting comparisons use 2019–2025 and were verified with 38/38/38/10 rows on 2026-10-14. This avoids changing the Core Gold fact grains solely to satisfy dashboard-specific aggregations. The publisher prepares and validates all four marts before updating final Glue locations. A failed publish triggers best-effort rollback of touched tables. This coordinates validation before publication and provides recovery of previous Glue table definitions if publication fails. The Core Gold ERD remains separate from the reporting-mart lineage diagram.
+The nine-table Core Gold dimensional model remains the reusable analytical foundation. Four separate country-level Analytics Gold marts are published from version-controlled Athena SQL as validated Parquet snapshots, catalogued in Glue and consumed by Power BI. The reporting comparisons use 2019–2025 and were reverified through Athena with 38/38/38/10 rows on 2026-11-09. The unchanged-result skip path passed live; an updated-result mart republish has not yet been live-tested. This avoids changing the Core Gold fact grains solely to satisfy dashboard-specific aggregations. The publisher prepares and validates all four marts before updating final Glue locations. A failed publish triggers best-effort rollback of touched tables. This coordinates validation before publication and provides recovery of previous Glue table definitions if publication fails. The Core Gold ERD remains separate from the reporting-mart lineage diagram.
+
+
+## Cross-platform SQL path resolution
+
+Analytics SQL is loaded relative to the checked-out project root
+(`Path(__file__).resolve().parents[2] / "sql" / "analytics"`), rather than
+using an Airflow-container-only absolute path. This allows the same code
+to run in local Windows Python and in Docker/Airflow and prevents the
+first manual Phase B runtime failure from recurring.
+
+## Phase B release-validation boundary
+
+The real AWS manual Silver and Core Gold writes, Glue publication, nine
+Athena Core Gold quality checks and four existing Analytics Gold table
+queries passed on 2026-11-09. The six-task Airflow DAG, fresh Bronze
+ingestion, failure-notification path and **changed-result** Analytics
+Gold republishing were not covered in that direct-stage test. See the
+[validation record](../operations/phase_b_validation_2026_11_09.md).
