@@ -120,11 +120,13 @@ unchanged-result mart rather than generating an unnecessary snapshot.
 
 The current release verification also covers an actual Windows-local
 execution of the SQL loader after removal of an Airflow-only absolute
-path. **Not yet exercised:** a complete Airflow DAG run, fresh monthly
-Ember ingestion, Slack failure-path testing, or publishing an Analytics
-Gold mart whose result genuinely changed. These are separate operational
-checks; successful direct-stage integration is not equivalent to
-unattended Airflow acceptance. No Terraform Apply was required.
+path. **Full manual Airflow end-to-end run PASSED on 2026-11-09:** all six
+DAG tasks succeeded, including Bronze ingestion, Silver, Core Gold, Glue,
+Athena validation and Analytics Gold. Independent AWS checks confirmed a
+new nine-table Core Gold snapshot and a genuinely new Parquet snapshot
+published for the energy-mix Analytics mart. Still untested: deliberately
+injected rollback/failure notification and unattended scheduler operation.
+No Terraform Apply was performed.
 
 Read the [Phase B integration evidence and outstanding checks](docs/operations/phase_b_validation_2026_11_09.md)
 and the [first-run / rollback checklist](docs/operations/phase_b_first_run.md).
