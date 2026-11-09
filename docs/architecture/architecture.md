@@ -26,7 +26,7 @@ Terraform manages the stable AWS infrastructure: the project S3 bucket configura
 
 ## Source Scope
 
-The configured analytical scope contains 41 Ember-supported European markets. Electricity generation, demand, power-sector emissions and carbon intensity use this common scope. Installed capacity uses **13 configured European markets** because Ember exposes monthly capacity data for fewer markets. The configured API request starts in **2010-01**, but actual available periods vary by dataset and country; the reporting marts use 2019–2025 comparisons with 38/38/38/10 observed country rows (verified 2026-10-14).
+The configured analytical scope contains 41 Ember-supported European markets. Electricity generation, demand, power-sector emissions and carbon intensity use this common scope. Installed capacity uses **13 configured European markets** because Ember exposes monthly capacity data for fewer markets. The configured API request starts in **2010-01**, but actual available periods vary by dataset and country; the reporting marts use 2019–2025 comparisons with 38/38/38/10 observed country rows (reverified through Athena on 2026-11-09).
 
 Geographic scope is configuration-driven rather than embedded in transformation logic, allowing source coverage to evolve without changing the core pipeline.
 
@@ -40,13 +40,13 @@ Historical scope expansions use a separate targeted backfill entry point. Backfi
 
 ## Silver
 
-New Bronze increments are cleaned and typed with pandas and merged with the current Silver snapshot using dataset-specific business keys. The complete merged state is validated before the stable Silver Parquet object is replaced.
+New Bronze increments are cleaned and typed with pandas and merged with the current Silver snapshot using dataset-specific business keys. A `control/silver/<dataset>.json` manifest records the Bronze object keys, ETags and sizes together with the published Silver snapshot ETag. When the manifest is valid, only new Bronze objects are read; unchanged inputs cause the Silver task to skip writing. Missing/stale manifests or changed/removed Bronze objects trigger a full rebuild. The complete merged state is validated before the stable Silver Parquet object is replaced, and the manifest is updated only after the successful write.
 
 The transformation preserves valid source semantics: missing observations are not imputed, statistical outliers are not automatically removed, and negative net-import values are retained. Additional Silver rules are documented in [`silver_data_quality_guidelines.md`](../decisions/silver_data_quality_guidelines.md).
 
 ## Gold
 
-Validated Silver datasets are transformed into a Fact Constellation / Galaxy model with four dimensions and five fact tables. Gold uses stable Parquet snapshot keys. Before persistence, the complete model is checked for key uniqueness, fact grain, required measures and referential integrity.
+Validated Silver datasets are transformed into a Fact Constellation / Galaxy model with four dimensions and five fact tables. Core Gold publishes immutable, run-specific Parquet objects under `gold_snapshots/<table>/<run-id>/<table>.parquet`, **outside** the old `gold/<table>/` prefixes. Before persistence, the complete model is checked for key uniqueness, fact grain, required measures and referential integrity. All nine files are staged before the corresponding nine Glue locations are updated. Glue publication is sequential (not atomic); failed updates trigger best-effort restoration of prior definitions. Previously published files are kept for recovery.
 
 ## Catalog and Analytics
 
@@ -83,7 +83,22 @@ flowchart LR
 
 The DAG contains six sequential tasks: Bronze ingestion, Silver transformation and validation, Core Gold transformation and validation, Glue catalog synchronization, Athena post-load validation of the nine Core Gold tables, and Analytics Gold publication. The Athena quality gate checks nonempty data, required fields, unique keys and valid fact foreign keys before the reporting marts are published. Failures stop the DAG and trigger its configured failure callback.
 
-The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False`. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
+The DAG runs monthly on the 10th at 14:00 Europe/Berlin with `catchup=False` and `max_active_runs=1` to avoid overlapping DAG publications. Standalone scripts must not run concurrently with the DAG. Slack provides failure notifications. Historical backfills are explicit maintenance operations rather than part of the monthly DAG. Legacy Glue crawlers are no longer part of the target architecture because catalog table creation and updates are handled explicitly by the pipeline.
+
+## Verified Phase B integration (2026-11-09)
+
+A controlled **manual** run of the actual feature-branch Silver and Core Gold
+transformations passed against the existing AWS resources. All five Silver
+manifests matched their Bronze metadata and snapshot ETags; all nine Core
+Gold Glue tables pointed to the same new snapshot run; all nine Core Gold
+Athena quality queries passed. The four existing Analytics Gold marts were
+also queryable through Athena with the expected 38/38/38/10 rows, and their
+unchanged-result fingerprints correctly prevented redundant publication.
+
+This verification **did not** execute the full Airflow DAG, new Ember API
+ingestion, or the changed-result Analytics Gold republishing path.
+See the [detailed validation record](../operations/phase_b_validation_2026_11_09.md)
+for evidence and remaining operational checks.
 
 ## Infrastructure as Code
 
