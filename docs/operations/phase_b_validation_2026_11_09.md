@@ -173,7 +173,8 @@ Slack failure-notification test. No Terraform Apply was performed.
       correct unchanged-fingerprint skip.
 - [x] Python and Terraform CI checks at the SQL-path-fix commit.
 - [x] Full **manual** Airflow DAG execution: all six tasks succeeded, including the Bronze ingestion task.
-- [x] Live **changed-result** Analytics Gold UNLOAD and Glue publication (energy-mix mart).\n- [ ] Deliberately injected Analytics Gold failure / rollback scenario.
+- [x] Live **changed-result** Analytics Gold UNLOAD and Glue publication (energy-mix mart).
+- [ ] Deliberately injected Analytics Gold failure / rollback scenario.
 - [ ] End-to-end Slack failure notification test.
 - [ ] Additional operational review before enabling unattended runs; manual success does not verify a scheduled run.
 
