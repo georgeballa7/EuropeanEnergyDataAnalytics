@@ -1,10 +1,11 @@
 # Phase B — first controlled AWS run (release gate)
 
-> Status: **prepared, not executed**. This playbook is for PR #14 on
-> `feature/phase-b-centralize-aws-config`, not for `main`.
-> The only completed AWS steps so far were **read-only**. Do not execute the
-> write steps without an explicit release decision, verified AWS identity,
-> verified backups, and a maintenance window.
+> **Historical first-run checklist — executed in controlled manual steps on 8–9 November 2026.**
+> The preflight baseline below describes the AWS state **before** Phase B;
+> it is no longer the current live state. The actual backup and integration
+> results are recorded in [Phase B AWS validation](phase_b_validation_2026_11_09.md).
+> This checklist remains a recovery / repeat-rollout reference. Do not
+> rerun its write commands against the same data without a fresh review.
 
 ## 1. Read-only AWS baseline (verified 2026-11-08)
 
@@ -60,7 +61,7 @@ new code has been exercised against AWS. Reconfirm it before any rollout.
 unavailable Glue baseline, concurrent writers, CI failure, or unexpected
 metadata/schema differences.
 
-## 3. Backup recipe — illustration only; NOT YET RUN
+## 3. Backup recipe — for a separate future rollout, not a repeat of the completed backup
 
 Run only after explicitly approving S3 writes and confirming permissions
 and paths. These commands are tailored to Windows PowerShell from the repo root.
@@ -119,7 +120,7 @@ do **not** blindly submit the original JSON to `UpdateTable`.
 Never store credentials, Terraform state, or sensitive local configuration
 in this backup directory or commit the backup directory to GitHub.
 
-## 4. Controlled execution order — requires separate write approval
+## 4. Controlled execution order — historical procedure; new runs require separate approval
 
 **Gate A — Silver pilot:** After validated backups and stopped Airflow,
 process the smallest representative dataset (`demand`) from the PR
@@ -156,8 +157,10 @@ all four reporting marts reference valid published snapshots.
 verify it performs no Bronze JSON downloads and no Silver writes.
 Check the Airflow task graph and failure notifications separately.
 
-Do **not** merge PR #14 or turn the full monthly DAG back on until
-the gates are documented and accepted.
+Do **not** activate or manually trigger the full monthly DAG without confirming
+its local runtime configuration and reviewing its untested orchestration and alert path.
+The direct stage-by-stage AWS integration was validated on 9 November 2026;
+that does **not** mean the Airflow DAG itself has completed a successful run.
 
 ## 5. Rollback / abort procedure
 
@@ -179,9 +182,16 @@ the gates are documented and accepted.
   during incident response. Treat manually changed Glue definitions as
   an incident requiring a new consistency check.
 
-## 6. Scope of this PR
+## 6. Scope and post-run status
 
-This runbook is a **release plan only**. It does not enable S3
-versioning, create backup objects, run pipelines, create/change Glue
-tables, execute Athena SQL, apply Terraform, or merge the PR. AWS
-metadata preflight may be rerun read-only at any time.
+This document captures the original first-run plan; **the documented manual
+AWS integration has since been executed**. The related S3 backups, Silver
+checkpoints, nine Core Gold snapshots, Glue updates, nine Athena Core Gold
+quality queries and four Analytics Gold verification queries are recorded in
+[the validation report](phase_b_validation_2026_11_09.md).
+
+The application S3 bucket remains unversioned; only the *separate Terraform
+state bucket* is documented as versioned. No Terraform Apply, direct Airflow DAG
+run, fresh Ember ingestion or end-to-end Slack notification test was part of
+the November 9 manual verification. Neither this markdown file nor its
+commands perform any actions by themselves.
