@@ -116,7 +116,7 @@ Silver now lists all Bronze object metadata but reads and cleans **only new** JS
 
 Core Gold first validates the full nine-table in-memory model, writes **all nine** Parquet files under unique `gold_snapshots/<table>/<run-id>/` prefixes, outside the legacy `gold/<table>/` prefixes, then updates the nine Glue table locations. If S3 staging fails, previously published tables stay unchanged. If a Glue update fails, the publisher attempts to restore every affected table definition in reverse order. **Glue changes across tables are not atomic**: consumers may briefly see a mixture during publication, and rollback itself can fail. Inspect the failed task, each Glue table location, and the rollback error before retrying. Legacy Core Gold tables continue reading from `gold/<table>/` until their Glue location switches, so staging cannot accidentally mix old and new Parquet files. Old and incomplete snapshots are deliberately retained for diagnosis and recovery; do not delete them without proving that no Glue table references them. S3 bucket versioning is not a replacement for this staged publication process.
 
-The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid running standalone Silver or Gold publishers concurrently with the DAG. Unit tests and CI mock AWS. **The real feature-branch Silver and Core Gold publishing steps were exercised manually against AWS on 2026-11-09**, with independent S3/Glue/Athena verification; see the [integration record](phase_b_validation_2026_11_09.md). The Airflow DAG itself has **not** been run end to end or validated for unattended operation.
+The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid running standalone Silver or Gold publishers concurrently with the DAG. Unit tests and CI mock AWS. **Both direct feature-branch AWS integration and the full six-task manually triggered Airflow DAG completed successfully on 2026-11-09**, with independent S3/Glue/Analytics publication verification; see the [integration record](phase_b_validation_2026_11_09.md). Unattended scheduling and intentionally triggered alert/rollback scenarios have not been validated.
 
 ### Analytics Gold publication and retry behavior
 
@@ -142,9 +142,7 @@ do not confuse it with the separate versioned Terraform state bucket.
 Never delete these backups or the legacy Gold objects without an
 explicit retention and restore decision.
 
-**Still not exercised:** the complete Airflow DAG, new scheduled Ember
-ingestion, end-to-end Slack alerting and changed-result Analytics Gold
-UNLOAD/republication. These are separate operational acceptance tests.
+**Follow-up after the same-day controlled manual Airflow E2E run:** all six tasks passed, a new nine-table Core Gold snapshot was published, and the energy-mix Analytics mart's changed-result UNLOAD/snapshot/Glue path was exercised. **Still not deliberately exercised:** scheduler-triggered unattended run, injected failure/rollback, or end-to-end Slack alerting.
 The precise results and commands are in the
 [Phase B AWS validation record](phase_b_validation_2026_11_09.md).
 
