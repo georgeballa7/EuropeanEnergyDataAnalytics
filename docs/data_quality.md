@@ -55,9 +55,7 @@ required fields, invalid fact foreign keys or duplicate key groups.
 
 The live reporting-mart checks verified four existing Glue registrations,
 the unchanged-result fingerprint skip and Athena row counts (38/38/38/10).
-They did **not** trigger new Analytics Gold snapshot publication.
-The six-task Airflow DAG, scheduled Bronze ingestion and Slack
-notification path were likewise not exercised. See the
+Later that day, the complete six-task manually triggered Airflow DAG succeeded. During this run the energy-mix Analytics Gold mart published a new Parquet snapshot and Glue location, confirming a live changed-result publication path. The automated scheduler trigger, deliberate rollback failure and Slack failure-notification path were not tested. See the
 [full validation record](operations/phase_b_validation_2026_11_09.md).
 
 ## Source-Aware Validation
