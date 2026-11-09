@@ -95,8 +95,7 @@ Athena quality queries passed. The four existing Analytics Gold marts were
 also queryable through Athena with the expected 38/38/38/10 rows, and their
 unchanged-result fingerprints correctly prevented redundant publication.
 
-This verification **did not** execute the full Airflow DAG, new Ember API
-ingestion, or the changed-result Analytics Gold republishing path.
+After this manual stage-level verification, the **full Airflow DAG passed all six tasks** on 2026-11-09, including the Bronze ingestion task. AWS read-back confirmed a new shared nine-table Core Gold snapshot and a newly published energy-mix Analytics Gold Parquet snapshot and Glue pointer. Automated schedule triggers and deliberately induced rollback/alert paths remain separate tests.
 See the [detailed validation record](../operations/phase_b_validation_2026_11_09.md)
 for evidence and remaining operational checks.
 
