@@ -39,9 +39,26 @@ The task fails on invalid data, Athena query errors or query timeouts. This chec
 
 After the Core Gold Athena quality gate, the sixth task `publish_analytics_gold` publishes four additional reporting marts. For each mart it checks that the Parquet snapshot can be queried through a temporary Glue table, contains at least one row, has non-null `country_name`, `start_year` and `end_year`, and has no duplicate country-period combinations. The final Glue table is updated only after those checks succeed. Temporary Glue tables are removed after validation.
 
-The published mart counts verified in Athena on 2026-10-14 were 38 (generation/demand), 38 (energy mix), 38 (emissions/intensity), and 10 (solar/wind capacity). These counts do not imply that the 41-market configured scope was reduced. Missing period comparisons and narrower capacity source coverage affect reporting completeness.
+The published mart counts initially verified in Athena on 2026-10-14 and **independently reconfirmed on 2026-11-09** were 38 (generation/demand), 38 (energy mix), 38 (emissions/intensity), and 10 (solar/wind capacity). The latest publisher run skipped all four unchanged-result marts; this verifies idempotency, not the changed-result UNLOAD/republish path. These counts do not imply that the 41-market configured scope was reduced. Missing period comparisons and narrower capacity source coverage affect reporting completeness.
 
 For unchanged SQL and result data, a stored fingerprint prevents repeat publication. The publisher prepares and validates **all four** marts before changing final Glue tables, then updates those tables sequentially. If an update fails, it attempts **best-effort rollback** of every touched table. The previous Glue table definitions are retained for recovery, while prepared snapshots remain available for investigation.
+
+## Phase B Live Verification (2026-11-09)
+
+A controlled direct-stage AWS verification inspected all five version-1
+Silver manifests: each Silver snapshot key and ETag matched its manifest,
+and all 19 Bronze objects' keys, ETags and sizes matched the manifest
+source inventory. All nine versioned Core Gold Parquet objects existed,
+and all nine Glue table locations and snapshot IDs matched. Nine Athena
+post-load quality queries were **successful** and returned zero null
+required fields, invalid fact foreign keys or duplicate key groups.
+
+The live reporting-mart checks verified four existing Glue registrations,
+the unchanged-result fingerprint skip and Athena row counts (38/38/38/10).
+They did **not** trigger new Analytics Gold snapshot publication.
+The six-task Airflow DAG, scheduled Bronze ingestion and Slack
+notification path were likewise not exercised. See the
+[full validation record](operations/phase_b_validation_2026_11_09.md).
 
 ## Source-Aware Validation
 
