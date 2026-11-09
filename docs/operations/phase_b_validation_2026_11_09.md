@@ -120,6 +120,49 @@ in this run. They are covered by the existing automated tests, but live
 publication of genuinely changed reporting data remains a separate
 future validation scenario.
 
+## Complete Airflow end-to-end run — PASSED (2026-11-09)
+
+A **manual** Airflow DAG run completed successfully with **all six tasks
+green**. The user-supplied Airflow run screen shows:
+
+- DAG: `european_energy_pipeline`, DAG version `v6`.
+- Run ID: `manual__2026-11-09T10:32:48.696641+00:00`.
+- Started: `2026-11-09 11:32:49` Europe/Berlin.
+- Finished: `2026-11-09 11:34:53` Europe/Berlin.
+- State: **success**.
+- Successful tasks, in execution order:
+  `extract_and_load_bronze`,
+  `transform_bronze_to_silver`,
+  `transform_silver_to_gold`,
+  `synchronize_glue_catalog`,
+  `validate_persisted_gold`, and
+  `publish_analytics_gold`.
+
+**Independent post-run AWS evidence (read-only):**
+
+- Five Silver manifests under `control/silver/` were all modified during
+  the run (10:33:25–10:33:31 UTC).
+- All nine Core Gold Glue tables were updated during the run and point to
+  snapshot `20261109T103334710852Z-fc838d3b`, under their respective
+  `gold_snapshots/<table>/<snapshot-id>/` prefixes.
+- All four Analytics Gold Glue locations point to nonempty S3 objects.
+  The `energy_mix_transition_summary` table points to a **new** Parquet
+  snapshot under
+  `gold/analytics/energy_mix_transition_summary/snapshots/6fa5e096e4614271916dbd54e002c08d/`.
+  Its Glue update occurred at **10:34:53 UTC**, and the S3 Parquet file
+  is 4,203 bytes. This is live evidence that the changed-result Athena
+  UNLOAD → snapshot → Glue publication path was exercised successfully.
+  The other three marts retained their prior locations.
+- The four reporting Glue table metadata row counts remain
+  **38 / 38 / 38 / 10**. Successful task state shows the DAG's built-in
+  Athena validation and analytics checks passed, while the manual
+  earlier individual Athena validations provide separate query evidence.
+
+**Important limits:** This was a manually triggered Airflow run rather
+than proof of future scheduler operation. It does not constitute a
+deliberately injected failure, exercised rollback, or an end-to-end
+Slack failure-notification test. No Terraform Apply was performed.
+
 ## Remaining operational checks
 
 - [x] Silver backup and complete Glue metadata backup.
@@ -129,10 +172,10 @@ future validation scenario.
 - [x] Four existing Analytics Gold tables queryable via Athena and
       correct unchanged-fingerprint skip.
 - [x] Python and Terraform CI checks at the SQL-path-fix commit.
-- [ ] Full Airflow DAG execution (including scheduled Bronze ingestion).
-- [ ] Live **changed-result** Analytics Gold UNLOAD/publish/rollback scenario.
+- [x] Full **manual** Airflow DAG execution: all six tasks succeeded, including the Bronze ingestion task.
+- [x] Live **changed-result** Analytics Gold UNLOAD and Glue publication (energy-mix mart).\n- [ ] Deliberately injected Analytics Gold failure / rollback scenario.
 - [ ] End-to-end Slack failure notification test.
-- [ ] Additional operational review before enabling unattended runs.
+- [ ] Additional operational review before enabling unattended runs; manual success does not verify a scheduled run.
 
 **Not performed:** Terraform Apply, main-branch merge, data deletion, or
 changes to bucket versioning. Preserve prior S3 backups, legacy Gold data
