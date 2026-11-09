@@ -8,7 +8,8 @@ from pathlib import Path
 
 from src.catalog.glue_catalog import BUCKET_NAME, DATABASE_NAME
 
-ANALYTICS_SQL_DIRECTORY = Path("/opt/airflow/project/sql/analytics")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ANALYTICS_SQL_DIRECTORY = PROJECT_ROOT / "sql" / "analytics"
 ANALYTICS_GOLD_PREFIX = "gold/analytics"
 
 # Each reporting mart is built from an existing, version-controlled SQL query.

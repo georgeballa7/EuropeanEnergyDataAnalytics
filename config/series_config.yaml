@@ -95,9 +95,6 @@ datasets:
 storage:
   bronze_prefix: bronze/ember
 
-aws:
-  profile_name: energy-pipeline
-
 series:
   Bioenergy:
     technology_group: Bioenergy

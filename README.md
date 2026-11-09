@@ -46,12 +46,15 @@ Python · pandas · Apache Airflow · Docker · Terraform · GitHub Actions · A
 - Serverless SQL analytics through the dedicated `european-energy-analytics` Athena workgroup
 - Power BI reporting over the existing nine-table Core Gold model through Athena
 - Four additive Analytics Gold reporting marts, prepared and validated before Glue publication, with unchanged-result detection and best-effort rollback
+- Bronze→Silver incremental checkpoints tied to the persisted Silver snapshot ETag; full rebuild on manifest/source mismatch
+- Versioned Core Gold Parquet snapshots for nine tables under a separate `gold_snapshots/` root, outside legacy `gold/<table>/` prefixes; Glue publication follows staging, with best-effort rollback
+- S3 listing pagination beyond 1,000 objects and serialized Airflow DAG runs to avoid overlapping publications
 
 ## Infrastructure, CI/CD and Monitoring
 
 Terraform manages the AWS infrastructure under [`infra/terraform/`](infra/terraform/), including S3, Glue, Athena, IAM, CloudWatch monitoring and SNS notifications. Remote Terraform state is stored in a separate encrypted, versioned S3 backend with native locking. Bootstrap IAM roles and policies support GitHub Actions authentication through OIDC and short-lived AWS credentials.
 
-The Terraform CI workflow validates configuration, generates an AWS-backed saved plan and blocks plans containing delete or replacement actions. A passing plan check does **not** automatically apply infrastructure changes. Apply operations require an explicit, reviewed procedure; see [Architecture](docs/architecture/architecture.md) for the separation of responsibilities.
+The pull-request CI workflow runs Python tests and Terraform formatting/validation. A **separate manually dispatched** AWS-authenticated Terraform workflow can generate a saved plan and block plans containing delete or replacement actions. A passing plan check does **not** automatically apply infrastructure changes. Apply operations require an explicit, reviewed procedure; see [Architecture](docs/architecture/architecture.md) for the separation of responsibilities.
 
 Airflow sends task failure notifications to Slack. CloudWatch monitors Athena failed-query metrics and routes alarm notifications through the existing SNS email topic.
 
@@ -75,6 +78,8 @@ Configure the `energy-pipeline` AWS CLI profile and verify the target identity b
 ```powershell
 aws sts get-caller-identity --profile energy-pipeline
 ```
+
+For direct local Python runs, set `$env:AWS_PROFILE = "energy-pipeline"` in PowerShell. The Silver and Gold transformations and Glue Catalog read their S3 bucket and region from `config/series_config.yaml` and use boto3's standard credential chain; they do not force a local profile. Docker Compose already supplies `AWS_PROFILE` for local Airflow. Bronze ingestion/backfill also use boto3's credential chain; no project-specific profile is forced in YAML.
 
 ### Run Airflow
 
@@ -138,5 +143,6 @@ The interactive report contains an introduction, executive overview, dedicated p
 - [Architecture Decisions](docs/decisions/architecture_decisions.md)
 - [Silver Data Quality Guidelines](docs/decisions/silver_data_quality_guidelines.md)
 - [Operations Runbook](docs/operations/runbook.md)
+- [Phase B: controlled first-run and rollback playbook](docs/operations/phase_b_first_run.md)
 
 Exploration, data understanding and EDA are documented in [`notebooks/`](notebooks/). The checked-in [Bronze data profile](docs/data_dictionary/bronze_data_profile.csv) is explicitly marked as a **historical initial sample**, not a current 41-market inventory; regenerate it from the intended S3 data before using its counts as current evidence. The [EDA notebook](notebooks/03_eda.ipynb) reads consolidated historical Silver Parquet snapshots for exploration; it does not replace the incremental Bronze/Silver/Gold pipeline.

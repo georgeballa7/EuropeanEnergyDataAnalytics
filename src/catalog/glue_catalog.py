@@ -32,14 +32,12 @@ from __future__ import annotations
 
 import boto3
 
+from config.settings import get_aws_settings
+
 
 DATABASE_NAME = "european_energy_analytics"
 
-BUCKET_NAME = (
-    "european-energy-data-analytics-488658242500-eu-central-1-an"
-)
-
-REGION_NAME = "eu-central-1"
+BUCKET_NAME, REGION_NAME = get_aws_settings()
 
 
 # ---------------------------------------------------------------------
@@ -309,29 +307,38 @@ def update_silver_tables(
         )
 
 
-def update_gold_tables(
-    glue_client,
-) -> None:
-    """Erstelle oder aktualisiere alle neun Gold-Tabellen im Glue Catalog."""
+def update_gold_tables(glue_client) -> None:
+    """Synchronisiere Gold-Schemata OHNE veröffentlichte Snapshot-Pfade zu ändern.
+
+    Core Gold wird jetzt zuvor im Gold-Transformationsschritt versioniert
+    veröffentlicht. Ein Zurücksetzen des Glue-Pfads auf gold/<table>/ würde
+    mehrere Snapshot-Dateien oder alte Legacy-Dateien vermischen.
+    """
     for table_name, columns in GOLD_TABLE_SCHEMAS.items():
-        s3_location = (
-            f"s3://{BUCKET_NAME}/"
-            f"gold/{table_name}/"
+        try:
+            previous = glue_client.get_table(
+                DatabaseName=DATABASE_NAME, Name=table_name
+            )["Table"]
+        except glue_client.exceptions.EntityNotFoundException as exc:
+            raise RuntimeError(
+                f"Core Gold table '{table_name}' must be published before catalog sync"
+            ) from exc
+        location = previous["StorageDescriptor"]["Location"]
+        if f"/gold_snapshots/{table_name}/" not in location:
+            raise ValueError(
+                f"Core Gold table '{table_name}' does not reference a versioned snapshot: {location}"
+            )
+        table_input = build_table_input(table_name, columns, location)
+        table_input["Parameters"].update(previous.get("Parameters", {}))
+        glue_client.update_table(
+            DatabaseName=DATABASE_NAME, TableInput=table_input
         )
-
-        create_or_update_table(
-            glue_client=glue_client,
-            table_name=table_name,
-            columns=columns,
-            s3_location=s3_location,
-        )
-
 
 def update_glue_catalog(
     aws_profile: str | None = None,
 ) -> None:
     """
-    Synchronisiere Silver- und Gold-Tabellen mit dem AWS Glue Data Catalog.
+    Synchronisiere Silver-Schemata und erhalte versionierte Gold-Snapshot-Pfade.
 
     Ein Lauf verwaltet insgesamt 14 externe Tabellen:
     fünf Tabellen der Silver-Schicht und neun Tabellen der Gold-Schicht.
@@ -345,6 +352,4 @@ def update_glue_catalog(
 
 
 if __name__ == "__main__":
-    update_glue_catalog(
-        aws_profile="energy-pipeline"
-    )
+    update_glue_catalog()

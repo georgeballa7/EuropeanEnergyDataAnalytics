@@ -29,6 +29,7 @@ with DAG(
     ),
     schedule="0 14 10 * *",
     catchup=False,
+    max_active_runs=1,  # Silver manifest and Glue publication must not race
     on_failure_callback=notify_slack_failure,
     tags=["energy", "ember", "aws", "s3", "glue"],
 ):

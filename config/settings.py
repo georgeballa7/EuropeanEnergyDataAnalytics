@@ -23,3 +23,14 @@ def load_config() -> dict:
     """
     with open(CONFIG_PATH, "r", encoding="utf-8") as file:
         return yaml.safe_load(file)
+
+
+def get_aws_settings() -> tuple[str, str]:
+    """Lade S3-Bucket und AWS-Region aus der zentralen Projektkonfiguration.
+
+    Das AWS-Profil wird absichtlich nicht hier festgelegt. boto3 nutzt
+    AWS_PROFILE, Umgebungs-Credentials oder eine IAM-Rolle über seine
+    Standard-Credential-Provider-Chain.
+    """
+    project = load_config()["project"]
+    return project["bucket"], project["region"]

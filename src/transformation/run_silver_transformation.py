@@ -3,7 +3,7 @@ Führe die Transformation von Bronze nach Silver aus.
 
 Ablauf
 ------
-1. Lade alle vorhandenen Bronze-JSON-Inkremente aus Amazon S3.
+1. Liste Bronze-JSON-Inkremente; lade neue Keys anhand des Silver-Manifests.
 2. Bereinige und typisiere die Bronze-Daten für die Silver-Schicht.
 3. Lade den aktuellen Silver-Snapshot, sofern bereits einer existiert.
 4. Führe bestehenden Snapshot und Bronze-Daten anhand des fachlichen Grains zusammen.
@@ -14,9 +14,10 @@ Silver verwendet damit eine Snapshot-Semantik: Bronze bleibt append-only und
 quellnah, während der jeweils neueste Silver-Snapshot den vollständigen,
 bereinigten und deduplizierten Zustand eines Datensatzes repräsentiert.
 
-Alle Bronze-Inkremente werden berücksichtigt. Dadurch kann ein fehlgeschlagener
-Silver-Lauf nicht dazu führen, dass ein älteres, noch nicht im Snapshot
-enthaltenes Bronze-Inkrement bei einem späteren Lauf übersprungen wird.
+Ein Manifest bindet die verarbeiteten Bronze-Keys an den geschriebenen Silver-
+Snapshot (ETag). Bei fehlendem oder inkonsistentem Manifest und bei geänderten
+oder entfernten Bronze-Objekten erfolgt ein vollständiger Wiederaufbau. Ein
+fehlgeschlagener Silver-Lauf aktualisiert das Manifest nicht.
 """
 
 import io
@@ -25,14 +26,14 @@ import json
 import boto3
 import pandas as pd
 
-from config.settings import load_config
+from config.settings import get_aws_settings, load_config
 from src.quality.data_quality import validate_dataset
 from src.transformation.clean_energy_data import clean_energy_data
-from src.transformation.silver_writer import write_silver_to_s3
+from src.transformation.silver_writer import build_silver_s3_key, write_silver_to_s3
+from src.transformation.silver_checkpoint import choose_bronze_keys, save_silver_manifest
+from src.utils.s3_listing import latest_object_key
 
-BUCKET_NAME = "european-energy-data-analytics-488658242500-eu-central-1-an"
-AWS_PROFILE = "energy-pipeline"
-REGION_NAME = "eu-central-1"
+BUCKET_NAME, REGION_NAME = get_aws_settings()
 DATASETS = ["generation", "demand", "emissions", "carbon_intensity", "capacity"]
 BUSINESS_KEYS = {
     "generation": ["entity_code", "date", "series"],
@@ -45,13 +46,11 @@ BUSINESS_KEYS = {
 
 def get_s3_client():
     """
-    Erzeuge einen S3-Client mit dem lokalen AWS-Profil des Projekts.
+    Erzeuge einen S3-Client über die boto3-Credential-Provider-Chain.
 
-    Das benannte Profil ist für die lokale Entwicklung vorgesehen. In einer
-    produktiven AWS-Umgebung sollten IAM Roles und temporäre Credentials
-    bevorzugt werden.
+    AWS_PROFILE kann lokal gesetzt werden; in AWS werden IAM-Rollen genutzt.
     """
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=REGION_NAME)
+    session = boto3.Session(region_name=REGION_NAME)
     return session.client("s3")
 
 
@@ -61,7 +60,7 @@ def get_expected_countries(dataset_name: str) -> list[str]:
     return config["datasets"][dataset_name].get("countries", config["countries"])
 
 
-def get_bronze_keys(s3_client, dataset_name: str) -> list[str]:
+def get_bronze_objects(s3_client, dataset_name: str) -> list[dict]:
     """
     Ermittle alle vorhandenen Bronze-JSON-Objekte eines Datensatzes.
 
@@ -101,34 +100,32 @@ def get_bronze_keys(s3_client, dataset_name: str) -> list[str]:
             f"Kein Bronze-JSON für den Datensatz '{dataset_name}' gefunden."
         )
 
-    return [
-        obj["Key"]
-        for obj in sorted(json_objects, key=lambda obj: (obj["LastModified"], obj["Key"]))
-    ]
+    return sorted(json_objects, key=lambda obj: (obj["LastModified"], obj["Key"]))
 
 
-def load_bronze_dataframes(s3_client, dataset_name: str) -> list[pd.DataFrame]:
-    """Lade alle Bronze-JSON-Inkremente eines Datensatzes aus S3."""
+def get_bronze_keys(s3_client, dataset_name: str) -> list[str]:
+    """Kompatible öffentliche Hilfsfunktion zum Auflisten aller Bronze-Keys."""
+    return [obj["Key"] for obj in get_bronze_objects(s3_client, dataset_name)]
+
+
+def load_bronze_dataframes(
+    s3_client, dataset_name: str, keys: list[str] | None = None
+) -> list[pd.DataFrame]:
+    """Lade nur die ausgewählten Bronze-JSON-Inkremente aus S3."""
+    if keys is None:
+        keys = get_bronze_keys(s3_client, dataset_name)
     dataframes = []
-
-    for key in get_bronze_keys(s3_client, dataset_name):
+    for key in keys:
         response = s3_client.get_object(Bucket=BUCKET_NAME, Key=key)
         payload = json.loads(response["Body"].read().decode("utf-8"))
         dataframes.append(pd.DataFrame(payload["data"]))
-
     return dataframes
 
 
 def get_latest_silver_key(s3_client, dataset_name: str) -> str | None:
-    """Ermittle den neuesten vorhandenen Silver-Snapshot eines Datensatzes."""
+    """Ermittle den jüngsten Silver-Snapshot über alle S3-Listenseiten."""
     prefix = f"silver/ember/{dataset_name}/"
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    parquet_objects = [
-        obj for obj in response.get("Contents", []) if obj["Key"].endswith(".parquet")
-    ]
-    if not parquet_objects:
-        return None
-    return max(parquet_objects, key=lambda obj: obj["LastModified"])["Key"]
+    return latest_object_key(s3_client, BUCKET_NAME, prefix, ".parquet")
 
 
 def load_latest_silver_dataframe(s3_client, dataset_name: str) -> pd.DataFrame | None:
@@ -160,17 +157,29 @@ def merge_silver_snapshot(
 
 
 def process_dataset(s3_client, dataset_name: str) -> None:
-    """Verarbeite einen Datensatz vollständig von Bronze nach Silver."""
+    """Lade neue Bronze-Objekte oder rekonstruiere Silver bei Abweichungen."""
     print(f"Verarbeite Datensatz: {dataset_name}")
+    bronze_objects = get_bronze_objects(s3_client, dataset_name)
+    silver_key = get_latest_silver_key(s3_client, dataset_name)
+    pending_keys, full_rebuild = choose_bronze_keys(
+        s3_client, BUCKET_NAME, dataset_name, bronze_objects, silver_key
+    )
+    if not pending_keys:
+        print(f"Keine neuen Bronze-Objekte für {dataset_name}; Silver unverändert.")
+        return
 
-    bronze_dataframes = load_bronze_dataframes(s3_client, dataset_name)
+    bronze_dataframes = load_bronze_dataframes(s3_client, dataset_name, pending_keys)
     cleaned_dataframes = [
         clean_energy_data(bronze_df, dataset_name)
         for bronze_df in bronze_dataframes
     ]
     new_silver_df = pd.concat(cleaned_dataframes, ignore_index=True)
 
-    current_silver_df = load_latest_silver_dataframe(s3_client, dataset_name)
+    # A stale or missing manifest makes the existing Silver snapshot unsafe as
+    # a merge base. Rebuild exclusively from immutable Bronze history instead.
+    current_silver_df = None if full_rebuild else load_latest_silver_dataframe(
+        s3_client, dataset_name
+    )
     silver_df = merge_silver_snapshot(
         current_silver_df=current_silver_df,
         new_silver_df=new_silver_df,
@@ -181,7 +190,6 @@ def process_dataset(s3_client, dataset_name: str) -> None:
         dataset_name,
         get_expected_countries(dataset_name),
     )
-
     if not quality_result["passed"]:
         raise ValueError(
             f"DQ-Validierung für '{dataset_name}' fehlgeschlagen: {quality_result}"
@@ -191,11 +199,18 @@ def process_dataset(s3_client, dataset_name: str) -> None:
         df=silver_df,
         dataset_name=dataset_name,
         bucket_name=BUCKET_NAME,
-        aws_profile=AWS_PROFILE,
         region_name=REGION_NAME,
     )
+    # Publish the checkpoint ONLY after the validated snapshot was persisted.
+    snapshot_key = build_silver_s3_key(dataset_name)
+    snapshot_etag = s3_client.head_object(
+        Bucket=BUCKET_NAME, Key=snapshot_key
+    )["ETag"]
+    save_silver_manifest(
+        s3_client, BUCKET_NAME, dataset_name, bronze_objects,
+        snapshot_key, snapshot_etag
+    )
     print(f"Abgeschlossen: {dataset_name} -> {s3_uri}")
-
 
 def main() -> None:
     """Führe die Bronze-zu-Silver-Verarbeitung für alle Projektdatensätze aus."""

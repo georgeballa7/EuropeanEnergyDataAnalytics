@@ -65,7 +65,6 @@ def ingestion_dependencies(monkeypatch):
         },
         "source": {"start_date": "2015-01"},
         "project": {"bucket": "test-bucket", "region": "eu-central-1"},
-        "aws": {"profile_name": None},
         "storage": {"bronze_prefix": "bronze/ember"},
     }
     client, writer, state = MagicMock(), MagicMock(), MagicMock()
@@ -128,5 +127,14 @@ def test_missing_api_date_rejects_response_without_state_change(ingestion_depend
     client.fetch_dataset.return_value = {"data": [{"entity_code": "DEU"}], "stats": {}}
     with pytest.raises(ValueError, match="Kein Quelldatum"):
         ingestion.run_ingestion()
+    writer.upload_raw_json.assert_not_called()
+    state.update.assert_not_called()
+
+
+def test_ingestion_without_legacy_aws_config(ingestion_dependencies):
+    """The removed YAML aws profile must not be accessed by ingestion."""
+    client, writer, state = ingestion_dependencies
+    state.get_last_source_date.return_value = "2026-09-01"
+    ingestion.run_ingestion()
     writer.upload_raw_json.assert_not_called()
     state.update.assert_not_called()
