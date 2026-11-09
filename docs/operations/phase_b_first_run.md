@@ -159,8 +159,7 @@ Check the Airflow task graph and failure notifications separately.
 
 Do **not** activate or manually trigger the full monthly DAG without confirming
 its local runtime configuration and reviewing its untested orchestration and alert path.
-The direct stage-by-stage AWS integration was validated on 9 November 2026;
-that does **not** mean the Airflow DAG itself has completed a successful run.
+The direct stage-by-stage AWS integration and a subsequent full manually triggered six-task Airflow DAG both passed on 9 November 2026. Scheduled unattended execution and deliberately triggered failure/notification recovery remain separate tests.
 
 ## 5. Rollback / abort procedure
 
@@ -191,7 +190,5 @@ quality queries and four Analytics Gold verification queries are recorded in
 [the validation report](phase_b_validation_2026_11_09.md).
 
 The application S3 bucket remains unversioned; only the *separate Terraform
-state bucket* is documented as versioned. No Terraform Apply, direct Airflow DAG
-run, fresh Ember ingestion or end-to-end Slack notification test was part of
-the November 9 manual verification. Neither this markdown file nor its
+state bucket* is documented as versioned. No Terraform Apply or end-to-end Slack failure-notification test was performed. A full **manual Airflow DAG run** succeeded later on 9 November, including its Bronze ingestion task and a new Analytics Gold energy-mix snapshot; it did not prove an unattended scheduled trigger. Neither this markdown file nor its
 commands perform any actions by themselves.
