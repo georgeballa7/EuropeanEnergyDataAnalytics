@@ -110,7 +110,7 @@ Before a manual run, check the intended Ember dataset/country scope (**41 market
 
 After a run, verify that all six Airflow tasks succeeded, especially `validate_persisted_gold` and `publish_analytics_gold`. Check expected new Bronze objects, updated Silver/Gold snapshots, Glue table metadata and Athena validation results. The fifth task, `validate_persisted_gold`, queries the existing `european-energy-analytics` workgroup and fails on empty Core Gold tables, null required fields, duplicate keys, invalid foreign keys, Athena errors or timeouts. The sixth task, `publish_analytics_gold`, prepares or skips reporting marts based on their fingerprints. Compare counts, country coverage and source periods with the project's [data-quality rules](../data_quality.md). A successful Airflow run alone does not prove analytical correctness.
 
-### Phase B: Silver checkpoint and Core Gold publication
+### Silver checkpoints and Core Gold publication
 
 Silver now lists all Bronze object metadata but reads and cleans **only new** JSON objects when the `control/silver/<dataset>.json` manifest matches the live Silver snapshot ETag. The manifest is written **after** the validated Parquet snapshot is stored. A missing, stale or invalid manifest, a replaced Bronze object or a removed Bronze object triggers a complete deterministic rebuild from Bronze. New historical backfill objects are recognized even though they do not update the ingestion state. If Silver writing or manifest writing fails, retry the Silver task; never manually advance the manifest. Do not modify Bronze or Silver objects while processing.
 
@@ -120,7 +120,7 @@ The Airflow DAG limits concurrent runs to one (`max_active_runs=1`); avoid runni
 
 ### Analytics Gold publication and retry behavior
 
-The checked-in Bronze profile CSV is a historical initial sample (20 core countries / 12 capacity countries), not a current coverage check. The publisher prepares and validates all four reporting marts before updating any final Glue table. The initial reporting validation on 2026-10-14 yielded 38, 38, 38 and 10 rows; Athena independently reconfirmed those counts on **2026-11-09**. On the November validation, all four Analytics marts returned `skipped=True` because data-derived fingerprints were unchanged; a changed-result republish was not live-tested. The project covers 41 markets overall, but comparison-year completeness and capacity-source coverage limit the reporting result sets.
+The checked-in Bronze profile CSV is a historical initial sample (20 core countries / 12 capacity countries), not a current coverage check. The publisher prepares and validates all four reporting marts before updating any final Glue table. The project covers 41 markets overall, but comparison-year completeness and capacity-source coverage limit the reporting result sets.
 
 For unchanged reporting SQL and result rows, the fingerprint stored on each final Glue table causes the publisher to skip a new snapshot. If any final Glue update fails, the publisher attempts to restore the previous table definitions for all touched marts in reverse order. Inspect the exception, the rollback results and the four current Glue locations before retrying. On a clean retry, unchanged marts are skipped based on fingerprints. Do not run concurrent publishers. Prepared or failed snapshots may remain unreferenced; do not delete them without confirming they are not referenced by Glue. If the Compose SQL mount was added after container creation, recreate Airflow services with `docker compose --env-file .env -f airflow/docker-compose.yaml up -d --force-recreate airflow-apiserver airflow-scheduler airflow-dag-processor` (without `down -v`).
 
@@ -163,4 +163,4 @@ A successful deployment or configuration check is not equivalent to a tested not
 - [ ] Terraform validation passes without changing infrastructure.
 - [ ] No credentials, state files or saved plans are committed.
 
-See [architecture](../architecture/architecture.md), [architecture decisions](../decisions/architecture_decisions.md), [data quality](../data_quality.md), and the the project validation notes in Notion for design and verified release evidence.
+See [architecture](../architecture/architecture.md), [architecture decisions](../decisions/architecture_decisions.md), [data quality](../data_quality.md), and the project validation notes in Notion for design and verified release evidence.
